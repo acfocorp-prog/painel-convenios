@@ -32,6 +32,7 @@ import { useStatusCatalog } from '@/hooks/useLookups';
 import { useProfileById } from '@/hooks/useProfileById';
 import { StatusBadge } from '@/components/records/StatusBadge';
 import { DueDateBadge } from '@/components/records/DueDateBadge';
+import { AttachmentList } from '@/components/records/AttachmentList';
 import { formatBRL, formatDate, formatRelative } from '@/lib/utils';
 
 export function ConvenioDetailPage() {
@@ -249,6 +250,8 @@ export function ConvenioDetailPage() {
         </Card>
 
         <CreatedBy created_by={c.created_by} created_at={c.created_at} updated_by={c.updated_by} updated_at={c.updated_at} />
+
+        <AttachmentList registroTipo="CONVENIO" registroId={c.id} />
       </div>
     </div>
   );
