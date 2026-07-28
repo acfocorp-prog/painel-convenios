@@ -19,8 +19,10 @@ import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useMandatos, type MandatoFilters } from '@/hooks/useMandatos';
+import { useMandatoExport } from '@/hooks/useExcelExport';
 import { StatusBadge } from '@/components/records/StatusBadge';
 import { DueDateBadge } from '@/components/records/DueDateBadge';
+import { ExportButton } from '@/components/records/ExportButton';
 import { cn, formatDate } from '@/lib/utils';
 
 const statusChip: Array<{
@@ -46,6 +48,7 @@ export function MandatoListPage() {
   };
 
   const { data, isLoading } = useMandatos(filters);
+  const exportMandatos = useMandatoExport(data ?? []);
 
   return (
     <div className="space-y-3">
@@ -53,10 +56,16 @@ export function MandatoListPage() {
         title="Mandato Tampão"
         description={data ? `${data.length} registro${data.length === 1 ? '' : 's'}` : ''}
         action={
-          <Button onClick={() => navigate('/mandatos/novo')}>
-            <Plus className="h-4 w-4" />
-            Novo
-          </Button>
+          <div className="flex items-center gap-2">
+            <ExportButton
+              onExport={exportMandatos}
+              disabled={!data || data.length === 0}
+            />
+            <Button onClick={() => navigate('/mandatos/novo')}>
+              <Plus className="h-4 w-4" />
+              Novo
+            </Button>
+          </div>
         }
       />
 

@@ -30,9 +30,11 @@ import {
   useConvenios,
   type ConvenioFilters,
 } from '@/hooks/useConvenios';
+import { useConvenioExport } from '@/hooks/useExcelExport';
 import { useVerbaTipos } from '@/hooks/useLookups';
 import { StatusBadge } from '@/components/records/StatusBadge';
 import { DueDateBadge } from '@/components/records/DueDateBadge';
+import { ExportButton } from '@/components/records/ExportButton';
 import { cn, formatBRL } from '@/lib/utils';
 
 const ALL = '__all__';
@@ -73,6 +75,7 @@ export function ConveniosListPage() {
 
   const { data, isLoading } = useConvenios(filters);
   const { data: verbaTipos } = useVerbaTipos();
+  const exportConvenios = useConvenioExport(data ?? []);
 
   return (
     <div className="space-y-3">
@@ -80,10 +83,16 @@ export function ConveniosListPage() {
         title="Convênios"
         description={data ? `${data.length} registro${data.length === 1 ? '' : 's'}` : ''}
         action={
-          <Button onClick={() => navigate('/convenios/novo')}>
-            <Plus className="h-4 w-4" />
-            Novo
-          </Button>
+          <div className="flex items-center gap-2">
+            <ExportButton
+              onExport={exportConvenios}
+              disabled={!data || data.length === 0}
+            />
+            <Button onClick={() => navigate('/convenios/novo')}>
+              <Plus className="h-4 w-4" />
+              Novo
+            </Button>
+          </div>
         }
       />
 

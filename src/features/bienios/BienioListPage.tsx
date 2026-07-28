@@ -19,8 +19,10 @@ import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useBienios, type BienioFilters } from '@/hooks/useBienios';
+import { useBienioExport } from '@/hooks/useExcelExport';
 import { StatusBadge } from '@/components/records/StatusBadge';
 import { DueDateBadge } from '@/components/records/DueDateBadge';
+import { ExportButton } from '@/components/records/ExportButton';
 import { cn } from '@/lib/utils';
 
 const statusChip: Array<{
@@ -48,6 +50,7 @@ export function BienioListPage() {
   };
 
   const { data, isLoading } = useBienios(filters);
+  const exportBienios = useBienioExport(data ?? []);
 
   return (
     <div className="space-y-3">
@@ -55,10 +58,16 @@ export function BienioListPage() {
         title="Biênio"
         description={data ? `${data.length} registro${data.length === 1 ? '' : 's'}` : ''}
         action={
-          <Button onClick={() => navigate('/bienios/novo')}>
-            <Plus className="h-4 w-4" />
-            Novo
-          </Button>
+          <div className="flex items-center gap-2">
+            <ExportButton
+              onExport={exportBienios}
+              disabled={!data || data.length === 0}
+            />
+            <Button onClick={() => navigate('/bienios/novo')}>
+              <Plus className="h-4 w-4" />
+              Novo
+            </Button>
+          </div>
         }
       />
 

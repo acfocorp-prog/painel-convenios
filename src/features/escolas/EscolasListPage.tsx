@@ -9,12 +9,15 @@ import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useEscolas, type Escola } from '@/hooks/useEscolas';
+import { useEscolaExport } from '@/hooks/useExcelExport';
+import { ExportButton } from '@/components/records/ExportButton';
 import { formatRelative } from '@/lib/utils';
 
 export function EscolasListPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const { data: escolas, isLoading } = useEscolas(search);
+  const exportEscolas = useEscolaExport(escolas ?? []);
 
   const total = escolas?.length ?? 0;
   const updatedAgo = useMemo(() => {
@@ -34,13 +37,19 @@ export function EscolasListPage() {
           updatedAgo ? ` · última atividade ${formatRelative(updatedAgo)}` : ''
         }`}
         action={
-          <Button
-            size="md"
-            onClick={() => navigate('/escolas/nova')}
-          >
-            <Plus className="h-4 w-4" />
-            Nova
-          </Button>
+          <div className="flex items-center gap-2">
+            <ExportButton
+              onExport={exportEscolas}
+              disabled={!escolas || escolas.length === 0}
+            />
+            <Button
+              size="md"
+              onClick={() => navigate('/escolas/nova')}
+            >
+              <Plus className="h-4 w-4" />
+              Nova
+            </Button>
+          </div>
         }
       />
 

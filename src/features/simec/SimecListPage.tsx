@@ -18,8 +18,10 @@ import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useSimec, type SimecFilters } from '@/hooks/useSimec';
+import { useSimecExport } from '@/hooks/useExcelExport';
 import { StatusBadge } from '@/components/records/StatusBadge';
 import { DueDateBadge } from '@/components/records/DueDateBadge';
+import { ExportButton } from '@/components/records/ExportButton';
 import { cn } from '@/lib/utils';
 
 const statusChip: Array<{
@@ -55,6 +57,7 @@ export function SimecListPage() {
   };
 
   const { data, isLoading } = useSimec(filters);
+  const exportSimec = useSimecExport(data ?? []);
 
   return (
     <div className="space-y-3">
@@ -62,10 +65,16 @@ export function SimecListPage() {
         title="SIMEC"
         description={data ? `${data.length} registro${data.length === 1 ? '' : 's'}` : ''}
         action={
-          <Button onClick={() => navigate('/simec/novo')}>
-            <Plus className="h-4 w-4" />
-            Novo
-          </Button>
+          <div className="flex items-center gap-2">
+            <ExportButton
+              onExport={exportSimec}
+              disabled={!data || data.length === 0}
+            />
+            <Button onClick={() => navigate('/simec/novo')}>
+              <Plus className="h-4 w-4" />
+              Novo
+            </Button>
+          </div>
         }
       />
 
