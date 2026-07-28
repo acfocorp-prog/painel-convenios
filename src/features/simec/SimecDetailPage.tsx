@@ -1,21 +1,315 @@
-import { Construction } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import {
+  ArrowLeft,
+  CalendarClock,
+  ExternalLink,
+  Pencil,
+  School,
+  Tag,
+  Trash2,
+  Clock,
+} from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { EmptyState } from '@/components/ui/empty-state';
-import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  useSimecById,
+  useDeleteSimec,
+  useUpdateSimec,
+} from '@/hooks/useSimec';
+import { useStatusHistory } from '@/hooks/useStatusHistory';
+import { useStatusCatalog } from '@/hooks/useLookups';
+import { useProfileById } from '@/hooks/useProfileById';
+import { StatusBadge } from '@/components/records/StatusBadge';
+import { DueDateBadge } from '@/components/records/DueDateBadge';
+import { formatDate, formatRelative } from '@/lib/utils';
 
 export function SimecDetailPage() {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const { data: s, isLoading } = useSimecById(id);
+  const { data: statusCatalog } = useStatusCatalog();
+  const update = useUpdateSimec(id ?? '');
+  const del = useDeleteSimec();
+  const { data: history } = useStatusHistory('SIMEC', id);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (!s) return null;
+
+  async function changeStatus(newStatusId: string) {
+    try {
+      await update.mutateAsync({ status_id: newStatusId });
+      toast.success('Status atualizado');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  async function togglePriority() {
+    try {
+      await update.mutateAsync({ priority: !s!.priority });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  async function onDelete() {
+    if (!confirm('Excluir esta adesão? (pode ser restaurada depois)')) return;
+    try {
+      await del.mutateAsync(s!.id);
+      toast.success('Adesão excluída');
+      navigate('/simec');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
   return (
-    <div className="space-y-2">
-      <PageHeader title="SIMEC" />
-      <div className="px-4">
-        <Card className="p-1">
-          <EmptyState
-            icon={Construction}
-            title="Em construção"
-            description="Detalhe do SIMEC entra na próxima iteração."
-          />
+    <div className="space-y-4 pb-6">
+      <div className="-mx-4">
+        <PageHeader
+          title={`${s.program} · ${s.year}`}
+          description="Adesão SIMEC"
+          action={
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Voltar"
+                onClick={() => navigate(-1)}
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Editar"
+                onClick={() => navigate(`/simec/${id}/editar`)}
+              >
+                <Pencil className="h-5 w-5" />
+              </Button>
+            </div>
+          }
+        />
+      </div>
+
+      <div className="space-y-3 px-4">
+        <Card>
+          <CardContent className="space-y-3 pt-3">
+            <div className="flex items-center justify-between">
+              <StatusBadge code={s.status_catalog?.code} />
+              <DueDateBadge
+                dueDate={s.due_date}
+                statusCode={s.status_catalog?.code}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <Info icon={Tag} label="Programa">
+                {s.program}
+              </Info>
+              <Info icon={Tag} label="Ano">
+                {s.year}
+              </Info>
+              {s.due_date && (
+                <Info icon={CalendarClock} label="Prazo">
+                  {formatDate(s.due_date)}
+                </Info>
+              )}
+            </div>
+
+            {s.escolas && (
+              <button
+                type="button"
+                onClick={() => navigate(`/escolas/${s.escolas!.id}`)}
+                className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white p-2 text-left text-sm hover:bg-slate-50"
+              >
+                <span className="flex items-center gap-2 text-slate-700">
+                  <School className="h-4 w-4 text-brand-700" />
+                  <span className="font-medium text-slate-900">
+                    {s.escolas.name}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    INEP {s.escolas.inep}
+                  </span>
+                </span>
+                <ExternalLink className="h-4 w-4 text-slate-400" />
+              </button>
+            )}
+
+            {s.notes && (
+              <p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-2 text-sm text-slate-700">
+                {s.notes}
+              </p>
+            )}
+          </CardContent>
         </Card>
+
+        {/* Status change */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>Mudar status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={s.status_id}
+              onValueChange={changeStatus}
+              disabled={update.isPending}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusCatalog?.map((sc) => (
+                  <SelectItem key={sc.id} value={sc.id}>
+                    {sc.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={s.priority ? 'success' : 'outline'}
+            size="sm"
+            onClick={togglePriority}
+            disabled={update.isPending}
+          >
+            {s.priority ? '✓ É prioridade' : 'Marcar como prioritário'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onDelete}>
+            <Trash2 className="h-4 w-4" />
+            Excluir
+          </Button>
+        </div>
+
+        {/* Histórico */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-slate-400" />
+              Histórico de status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {history && history.length === 0 && (
+              <p className="text-sm text-slate-500">
+                Sem mudanças de status registradas.
+              </p>
+            )}
+            <ul className="space-y-2">
+              {history?.map((h) => (
+                <HistoryItem
+                  key={h.id}
+                  oldId={h.old_status_id}
+                  newId={h.new_status_id}
+                  at={h.changed_at}
+                  by={h.changed_by}
+                />
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <CreatedBy
+          created_by={s.created_by}
+          created_at={s.created_at}
+          updated_by={s.updated_by}
+          updated_at={s.updated_at}
+        />
       </div>
     </div>
+  );
+}
+
+function Info({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-xl bg-slate-50 p-2">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wide text-slate-500">
+          {label}
+        </p>
+        <p className="truncate text-sm text-slate-900">{children}</p>
+      </div>
+    </div>
+  );
+}
+
+function HistoryItem({
+  oldId,
+  newId,
+  at,
+  by,
+}: {
+  oldId: string | null;
+  newId: string;
+  at: string;
+  by: string | null;
+}) {
+  const { data: catalog } = useStatusCatalog();
+  const { data: byProfile } = useProfileById(by);
+  const oldLabel = catalog?.find((sc) => sc.id === oldId)?.label ?? '—';
+  const newLabel = catalog?.find((sc) => sc.id === newId)?.label ?? '—';
+
+  return (
+    <li className="rounded-xl bg-slate-50 p-2 text-sm">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-slate-900">
+          {oldLabel} → {newLabel}
+        </span>
+        <span className="text-xs text-slate-500">{formatRelative(at)}</span>
+      </div>
+      <p className="mt-0.5 text-xs text-slate-500">
+        por {byProfile?.full_name ?? 'usuário'}
+      </p>
+    </li>
+  );
+}
+
+function CreatedBy({
+  created_by,
+  created_at,
+  updated_by,
+  updated_at,
+}: {
+  created_by: string | null;
+  created_at: string;
+  updated_by: string | null;
+  updated_at: string;
+}) {
+  const a = useProfileById(created_by);
+  const b = useProfileById(updated_by);
+  return (
+    <p className="px-1 text-xs text-slate-500">
+      Criado por <strong>{a.data?.full_name ?? 'usuário'}</strong>{' '}
+      {formatRelative(created_at)}
+      {updated_at !== created_at && (
+        <>
+          {' · última edição por '}
+          <strong>{b.data?.full_name ?? 'usuário'}</strong>{' '}
+          {formatRelative(updated_at)}
+        </>
+      )}
+    </p>
   );
 }
