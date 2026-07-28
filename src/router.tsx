@@ -19,6 +19,7 @@ import { BienioFormPage } from './features/bienios/BienioFormPage';
 import { BienioDetailPage } from './features/bienios/BienioDetailPage';
 import { MandatoFormPage } from './features/mandatos/MandatoFormPage';
 import { MandatoDetailPage } from './features/mandatos/MandatoDetailPage';
+import { SettingsPage } from './features/settings/SettingsPage';
 
 /**
  * Hash router funciona em qualquer static deploy sem precisar de regra de
@@ -55,6 +56,7 @@ export const router = createHashRouter([
       { path: 'escolas/:id', element: <EscolaDetailPage /> },
       { path: 'escolas/:id/editar', element: <EscolaFormPage /> },
       { path: 'concluidos', element: <ConcluidosPage /> },
+      { path: 'settings', element: <SettingsPage /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },
