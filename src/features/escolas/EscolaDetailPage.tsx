@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -8,6 +8,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/records/StatusBadge';
+import { DueDateBadge } from '@/components/records/DueDateBadge';
 import {
   useDeleteSchoolNote,
   useCreateSchoolNote,
@@ -15,12 +18,20 @@ import {
   useSchoolNotes,
   useUpdateEscola,
 } from '@/hooks/useEscolas';
-import { formatRelative } from '@/lib/utils';
+import { useEscolaRecords } from '@/hooks/useEscolaRecords';
+import type { ConvenioRow } from '@/hooks/useConvenios';
+import type { SimecRow } from '@/hooks/useSimec';
+import type { BienioRow } from '@/hooks/useBienios';
+import type { MandatoRow } from '@/hooks/useMandatos';
+import { cn, formatDate, formatRelative } from '@/lib/utils';
+
+const PREVIEW_LIMIT = 5;
 
 export function EscolaDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: escola, isLoading } = useEscola(id);
+  const records = useEscolaRecords(id);
 
   if (isLoading) return <LoadingSpinner />;
   if (!escola) return null;
@@ -55,6 +66,11 @@ export function EscolaDetailPage() {
       </div>
 
       <ToggleActive escolaId={id!} active={escola.active} />
+
+      <SectionConvenios items={records.convenios} />
+      <SectionSimec items={records.simec} />
+      <SectionBienios items={records.bienios} />
+      <SectionMandatos items={records.mandatos} />
 
       <SchoolNotes escolaId={id!} />
     </div>
@@ -91,6 +107,230 @@ function ToggleActive({ escolaId, active }: { escolaId: string; active: boolean 
         </Button>
       </div>
     </Card>
+  );
+}
+
+// ── Seções por módulo ──────────────────────────────────────────────
+
+function SectionConvenios({ items }: { items: ConvenioRow[] }) {
+  const preview = items.slice(0, PREVIEW_LIMIT);
+  return (
+    <Section
+      titulo="Convênios desta escola"
+      total={items.length}
+      emptyHint="Nenhum convênio vinculado a esta escola."
+      ctaAdd={
+        <Link to="/convenios/novo">
+          <Button size="sm" variant="outline">
+            <Plus className="h-4 w-4" />
+            Adicionar
+          </Button>
+        </Link>
+      }
+    >
+      {preview.map((c) => (
+        <Link
+          key={c.id}
+          to={`/convenios/${c.id}`}
+          className="block active:scale-[0.99]"
+        >
+          <Card className="p-3 hover:bg-slate-50">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-900">
+                  {c.ref || c.description || 'Convênio'}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {c.verba_tipos?.label ?? '—'} · {c.year}
+                  {c.due_date && ` · prazo ${formatDate(c.due_date)}`}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge code={c.status_catalog?.code} />
+                <DueDateBadge
+                  dueDate={c.due_date}
+                  statusCode={c.status_catalog?.code}
+                />
+              </div>
+            </div>
+          </Card>
+        </Link>
+      ))}
+    </Section>
+  );
+}
+
+function SectionSimec({ items }: { items: SimecRow[] }) {
+  const preview = items.slice(0, PREVIEW_LIMIT);
+  return (
+    <Section
+      titulo="SIMEC desta escola"
+      total={items.length}
+      emptyHint="Nenhuma adesão SIMEC cadastrada."
+      ctaAdd={
+        <Link to="/simec/novo">
+          <Button size="sm" variant="outline">
+            <Plus className="h-4 w-4" />
+            Adicionar
+          </Button>
+        </Link>
+      }
+    >
+      {preview.map((s) => (
+        <Link
+          key={s.id}
+          to={`/simec/${s.id}`}
+          className="block active:scale-[0.99]"
+        >
+          <Card className="p-3 hover:bg-slate-50">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-900">
+                  {s.program}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {s.year}
+                  {s.due_date && ` · prazo ${formatDate(s.due_date)}`}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge code={s.status_catalog?.code} />
+                <DueDateBadge
+                  dueDate={s.due_date}
+                  statusCode={s.status_catalog?.code}
+                />
+              </div>
+            </div>
+          </Card>
+        </Link>
+      ))}
+    </Section>
+  );
+}
+
+function SectionBienios({ items }: { items: BienioRow[] }) {
+  const preview = items.slice(0, PREVIEW_LIMIT);
+  return (
+    <Section
+      titulo="Biênios desta escola"
+      total={items.length}
+      emptyHint="Nenhum biênio cadastrado."
+      ctaAdd={
+        <Link to="/bienios/novo">
+          <Button size="sm" variant="outline">
+            <Plus className="h-4 w-4" />
+            Adicionar
+          </Button>
+        </Link>
+      }
+    >
+      {preview.map((b) => (
+        <Link
+          key={b.id}
+          to={`/bienios/${b.id}`}
+          className="block active:scale-[0.99]"
+        >
+          <Card className="p-3 hover:bg-slate-50">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-900">
+                  Biênio {b.start_year}/{b.end_year}
+                </p>
+                <p className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
+                  {b.notary_validated && (
+                    <Badge variant="ok">✓ cartório</Badge>
+                  )}
+                  {b.due_date && <span>· prazo {formatDate(b.due_date)}</span>}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge code={b.status_catalog?.code} />
+                <DueDateBadge
+                  dueDate={b.due_date}
+                  statusCode={b.status_catalog?.code}
+                />
+              </div>
+            </div>
+          </Card>
+        </Link>
+      ))}
+    </Section>
+  );
+}
+
+function SectionMandatos({ items }: { items: MandatoRow[] }) {
+  if (items.length === 0) return null;
+  const preview = items.slice(0, PREVIEW_LIMIT);
+  return (
+    <Section
+      titulo="Mandatos desta escola"
+      total={items.length}
+      emptyHint=""
+    >
+      {preview.map((m) => (
+        <Link
+          key={m.id}
+          to={`/mandatos/${m.id}`}
+          className="block active:scale-[0.99]"
+        >
+          <Card className="p-3 hover:bg-slate-50">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-900">
+                  Mandato tampão
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {formatDate(m.start_date)} → {formatDate(m.end_date)}
+                  {m.due_date && ` · prazo ${formatDate(m.due_date)}`}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge code={m.status_catalog?.code} />
+                <DueDateBadge
+                  dueDate={m.due_date}
+                  statusCode={m.status_catalog?.code}
+                />
+              </div>
+            </div>
+          </Card>
+        </Link>
+      ))}
+    </Section>
+  );
+}
+
+function Section({
+  titulo,
+  total,
+  emptyHint,
+  ctaAdd,
+  children,
+}: {
+  titulo: string;
+  total: number;
+  emptyHint: string;
+  ctaAdd?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-900">
+          {titulo}{' '}
+          <Badge variant="neutral" className="ml-1">
+            {total}
+          </Badge>
+        </h2>
+        {ctaAdd}
+      </div>
+      {total === 0 ? (
+        <Card className="p-3">
+          <p className="text-center text-xs text-slate-500">{emptyHint}</p>
+        </Card>
+      ) : (
+        <ul className={cn('space-y-2')}>{children}</ul>
+      )}
+    </section>
   );
 }
 
