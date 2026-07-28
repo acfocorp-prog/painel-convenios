@@ -84,6 +84,7 @@ export interface Database {
           label: string;
           color: string;
           is_terminal: boolean;
+          sort_order: number;
         };
         Insert: Partial<Database['public']['Tables']['status_catalog']['Row']> & {
           code: Database['public']['Tables']['status_catalog']['Row']['code'];

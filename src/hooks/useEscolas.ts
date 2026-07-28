@@ -74,6 +74,7 @@ export function useCreateEscola() {
           active: input.active ?? true,
           created_by: user?.id ?? null,
           updated_by: user?.id ?? null,
+          deleted_at: null,
         })
         .select()
         .single();
@@ -92,7 +93,12 @@ export function useUpdateEscola(id: string) {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (input: Partial<EscolaInsert>) => {
-      const update: Record<string, unknown> = { updated_by: user?.id ?? null };
+      const update: Partial<{
+        inep: string;
+        name: string;
+        active: boolean;
+        updated_by: string | null;
+      }> = { updated_by: user?.id ?? null };
       if (input.inep !== undefined) update.inep = input.inep.trim();
       if (input.name !== undefined) update.name = input.name.trim();
       if (input.active !== undefined) update.active = input.active;

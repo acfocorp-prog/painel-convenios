@@ -4,6 +4,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 
 export default defineConfig({
+  // Quando o app roda num subcaminho (ex.: GitHub Pages em /painel-convenios/),
+  // o Vite precisa saber pra gerar URLs absolutas com esse prefixo.
+  base: '/painel-convenios/',
   plugins: [
     react(),
     VitePWA({
@@ -17,8 +20,8 @@ export default defineConfig({
         background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
-        scope: '/',
+        start_url: '/painel-convenios/',
+        scope: '/painel-convenios/',
         lang: 'pt-BR',
         // SVG icons são aceitos por Chrome, Edge, Safari TP e Android desde 2022.
         // Para PWA Lighthouse 100, troque pelos PNGs equivalentes em public/icons/.

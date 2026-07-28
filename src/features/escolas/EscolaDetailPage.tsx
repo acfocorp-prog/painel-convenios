@@ -8,7 +8,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Badge } from '@/components/ui/badge';
 import {
   useDeleteSchoolNote,
   useCreateSchoolNote,
@@ -16,7 +15,7 @@ import {
   useSchoolNotes,
   useUpdateEscola,
 } from '@/hooks/useEscolas';
-import { formatRelative, initialsOf } from '@/lib/utils';
+import { formatRelative } from '@/lib/utils';
 
 export function EscolaDetailPage() {
   const { id } = useParams();

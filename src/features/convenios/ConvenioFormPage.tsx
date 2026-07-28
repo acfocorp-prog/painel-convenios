@@ -188,15 +188,17 @@ export function ConvenioFormPage() {
     }
   }
 
-  function onSubmitWithWarnCheck(data: FormData) {
+  const handleFormSubmit = handleSubmit(onSubmit);
+
+  function onSubmitWithWarnCheck(event: React.FormEvent<HTMLFormElement>) {
     if (
-      data.launched &&
+      launched &&
       verbaSelecionada?.requires_bank_info &&
-      (!data.bank_branch?.trim() || !data.bank_account?.trim())
+      (!bankBranch?.trim() || !bankAccount?.trim())
     ) {
       setShowBankWarning(true);
     }
-    return handleSubmit(onSubmit)(data);
+    return handleFormSubmit(event);
   }
 
   if (isEditing && isLoading) return <LoadingSpinner />;
@@ -218,7 +220,7 @@ export function ConvenioFormPage() {
       />
 
       <form
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={onSubmitWithWarnCheck}
         className="space-y-4 px-4 pb-6"
       >
         {showBankWarning && (
@@ -492,7 +494,6 @@ export function ConvenioFormPage() {
         <Button
           type="submit"
           className="w-full"
-          onClick={onSubmitWithWarnCheck}
           disabled={isSubmitting || create.isPending || update.isPending}
         >
           <Save className="h-4 w-4" />

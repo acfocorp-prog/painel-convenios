@@ -36,3 +36,7 @@ dev-dist/
 
 # TypeScript
 *.tsbuildinfo
+
+# Outputs acidentais do tsc no root (vite.config.ts é a fonte)
+vite.config.js
+vite.config.d.ts

@@ -14,7 +14,6 @@ import {
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import {
   Select,
@@ -243,7 +242,7 @@ export function ConvenioDetailPage() {
             )}
             <ul className="space-y-2">
               {history?.map((h) => (
-                <HistoryItem key={h.id} historyId={h.id} oldId={h.old_status_id} newId={h.new_status_id} at={h.changed_at} by={h.changed_by} />
+                <HistoryItem key={h.id} oldId={h.old_status_id} newId={h.new_status_id} at={h.changed_at} by={h.changed_by} />
               ))}
             </ul>
           </CardContent>
@@ -278,13 +277,11 @@ function Info({
 }
 
 function HistoryItem({
-  historyId,
   oldId,
   newId,
   at,
   by,
 }: {
-  historyId: string;
   oldId: string | null;
   newId: string;
   at: string;

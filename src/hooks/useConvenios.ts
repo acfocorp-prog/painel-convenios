@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import type { Database } from '@/types/database';
 import { useAuth } from './useAuth';
+
+type ConveniosInsert = Database['public']['Tables']['convenios']['Insert'];
 
 export type ConvenioRow = {
   id: string;
@@ -138,11 +141,25 @@ export function useCreateConvenio() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (input: ConvenioInsert) => {
-      const payload = {
-        ...input,
+      const payload: ConveniosInsert = {
+        ref: input.ref ?? null,
+        year: input.year,
+        verba_tipo_id: input.verba_tipo_id,
+        description: input.description ?? null,
         amount: input.amount ?? null,
+        due_date: input.due_date ?? null,
+        launched: input.launched ?? false,
+        launched_at: input.launched_at ?? null,
+        status_id: input.status_id,
+        priority: input.priority ?? false,
+        notes: input.notes ?? null,
+        escola_id: input.escola_id ?? null,
+        bank_branch: input.bank_branch ?? null,
+        bank_account: input.bank_account ?? null,
+        process_link: input.process_link ?? null,
         created_by: user?.id ?? null,
         updated_by: user?.id ?? null,
+        deleted_at: null,
       };
       const { data, error } = await supabase
         .from('convenios')

@@ -37,12 +37,17 @@ import { cn, formatBRL } from '@/lib/utils';
 
 const ALL = '__all__';
 
-const statusChip = [
-  { code: 'EM_ANDAMENTO', label: 'Em andamento', icon: CircleDashed },
+const statusChip: Array<{
+  code: 'EM_ANDAMENTO' | 'ATRASADO' | 'CONCLUIDO' | 'CANCELADO';
+  label: string;
+  icon: typeof CircleDashed;
+  isLate: boolean;
+}> = [
+  { code: 'EM_ANDAMENTO', label: 'Em andamento', icon: CircleDashed, isLate: false },
   { code: 'ATRASADO', label: 'Atrasados', icon: AlertTriangle, isLate: true },
-  { code: 'CONCLUIDO', label: 'Concluídos', icon: CheckCircle2 },
-  { code: 'CANCELADO', label: 'Cancelados', icon: ListChecks },
-] as const;
+  { code: 'CONCLUIDO', label: 'Concluídos', icon: CheckCircle2, isLate: false },
+  { code: 'CANCELADO', label: 'Cancelados', icon: ListChecks, isLate: false },
+];
 
 const currentYear = new Date().getFullYear();
 const yearOptions = [

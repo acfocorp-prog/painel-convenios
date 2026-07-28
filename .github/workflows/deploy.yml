@@ -1,0 +1,52 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Concede ao GITHUB_TOKEN as permissões necessárias para commit/push no branch gh-pages
+permissions:
+  contents: write
+
+# Garante que só rode 1 deploy por vez (evita race entre pushes seguidos)
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Criar .env.local a partir dos secrets do repositório
+        run: |
+          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" > .env.local
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env.local
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Build (gera pasta dist/)
+        run: npm run build
+
+      - name: Deploy para GitHub Pages (branch gh-pages)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          # Mantém histórico razoável de commits na branch gh-pages
+          keep_files: false
+          # Garante que CNAME/custom-domain não seja criado por engano
+          disable_nojekyll: false
+          # Caso você use domínio customizado no futuro, descomente a linha abaixo
+          # cname: painel.example.com
+          # Pasta de commit do site: gh-pages branch, raiz
