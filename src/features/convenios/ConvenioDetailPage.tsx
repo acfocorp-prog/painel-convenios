@@ -25,9 +25,9 @@ import {
 import {
   useConvenio,
   useDeleteConvenio,
-  useStatusHistory,
   useUpdateConvenio,
 } from '@/hooks/useConvenios';
+import { useStatusHistory } from '@/hooks/useStatusHistory';
 import { useStatusCatalog } from '@/hooks/useLookups';
 import { useProfileById } from '@/hooks/useProfileById';
 import { StatusBadge } from '@/components/records/StatusBadge';

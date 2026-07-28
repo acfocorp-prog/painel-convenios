@@ -221,36 +221,3 @@ export function useDeleteConvenio() {
     },
   });
 }
-
-/* Status history do registro */
-
-export type StatusHistoryEntry = {
-  id: string;
-  registro_tipo: 'CONVENIO';
-  registro_id: string;
-  old_status_id: string | null;
-  new_status_id: string;
-  comment: string | null;
-  changed_by: string | null;
-  changed_at: string;
-};
-
-export function useStatusHistory(
-  registroTipo: 'CONVENIO',
-  registroId: string | undefined,
-) {
-  return useQuery({
-    queryKey: ['status_history', registroTipo, registroId],
-    enabled: !!registroId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('status_history')
-        .select('*')
-        .eq('registro_tipo', registroTipo)
-        .eq('registro_id', registroId!)
-        .order('changed_at', { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as StatusHistoryEntry[];
-    },
-  });
-}
