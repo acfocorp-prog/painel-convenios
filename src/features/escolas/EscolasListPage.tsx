@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { useEscolas, type Escola } from '@/hooks/useEscolas';
 import { useEscolaExport } from '@/hooks/useExcelExport';
 import { ExportButton } from '@/components/records/ExportButton';
+import { EscolaImportDialog } from './EscolaImportDialog';
 import { formatRelative } from '@/lib/utils';
 
 export function EscolasListPage() {
@@ -37,7 +38,8 @@ export function EscolasListPage() {
           updatedAgo ? ` · última atividade ${formatRelative(updatedAgo)}` : ''
         }`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <EscolaImportDialog />
             <ExportButton
               onExport={exportEscolas}
               disabled={!escolas || escolas.length === 0}
