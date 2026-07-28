@@ -221,3 +221,60 @@ export function useDeleteConvenio() {
     },
   });
 }
+
+/**
+ * Duplica um convênio resetando estado (status volta pra EM_ANDAMENTO,
+ * launched=false, due_date vazio, notas com prefixo).
+ * Retorna o id do novo convênio criado pra navegação automática.
+ */
+export function useDuplicateConvenio(id: string) {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async () => {
+      // Busca o original
+      const { data: original, error: fetchErr } = await supabase
+        .from('convenios')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!original) throw new Error('Convênio não encontrado');
+
+      const payload: ConveniosInsert = {
+        ref: original.ref,
+        year: original.year,
+        verba_tipo_id: original.verba_tipo_id,
+        description: original.description,
+        amount: original.amount,
+        due_date: null,
+        launched: false,
+        launched_at: null,
+        status_id: original.status_id,
+        priority: original.priority,
+        notes: original.notes
+          ? `[Cópia] ${original.notes}`
+          : '[Cópia]',
+        escola_id: original.escola_id,
+        bank_branch: original.bank_branch,
+        bank_account: original.bank_account,
+        process_link: original.process_link,
+        created_by: user?.id ?? null,
+        updated_by: user?.id ?? null,
+        deleted_at: null,
+      };
+      const { data, error } = await supabase
+        .from('convenios')
+        .insert(payload)
+        .select('id')
+        .single();
+      if (error) throw error;
+      return data.id;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['convenios'] });
+      qc.invalidateQueries({ queryKey: ['overview'] });
+      qc.invalidateQueries({ queryKey: ['concluidos'] });
+    },
+  });
+}

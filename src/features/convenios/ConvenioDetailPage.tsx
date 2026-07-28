@@ -9,7 +9,6 @@ import {
   School,
   Tag,
   Trash2,
-  Clock,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -25,14 +24,16 @@ import {
 import {
   useConvenio,
   useDeleteConvenio,
+  useDuplicateConvenio,
   useUpdateConvenio,
 } from '@/hooks/useConvenios';
-import { useStatusHistory } from '@/hooks/useStatusHistory';
 import { useStatusCatalog } from '@/hooks/useLookups';
 import { useProfileById } from '@/hooks/useProfileById';
 import { StatusBadge } from '@/components/records/StatusBadge';
 import { DueDateBadge } from '@/components/records/DueDateBadge';
 import { AttachmentList } from '@/components/records/AttachmentList';
+import { AuditTimeline } from '@/components/records/AuditTimeline';
+import { Copy } from 'lucide-react';
 import { formatBRL, formatDate, formatRelative } from '@/lib/utils';
 
 export function ConvenioDetailPage() {
@@ -42,7 +43,7 @@ export function ConvenioDetailPage() {
   const { data: statusCatalog } = useStatusCatalog();
   const update = useUpdateConvenio(id ?? '');
   const del = useDeleteConvenio();
-  const { data: history } = useStatusHistory('CONVENIO', id);
+  const duplicate = useDuplicateConvenio(id ?? '');
 
   if (isLoading) return <LoadingSpinner />;
   if (!c) return null;
@@ -72,6 +73,16 @@ export function ConvenioDetailPage() {
       navigate('/convenios');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  async function onDuplicate() {
+    try {
+      const newId = await duplicate.mutateAsync();
+      toast.success('Cópia criada — edite o prazo e dados novos.');
+      navigate(`/convenios/${newId}/editar`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao duplicar');
     }
   }
 
@@ -221,6 +232,15 @@ export function ConvenioDetailPage() {
           >
             {c.priority ? '✓ É prioridade' : 'Marcar como prioritário'}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDuplicate}
+            disabled={duplicate.isPending}
+          >
+            <Copy className="h-4 w-4" />
+            {duplicate.isPending ? 'Duplicando…' : 'Duplicar'}
+          </Button>
           <Button variant="ghost" size="sm" onClick={onDelete}>
             <Trash2 className="h-4 w-4" />
             Excluir
@@ -228,26 +248,7 @@ export function ConvenioDetailPage() {
         </div>
 
         {/* Histórico */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-slate-400" />
-              Histórico de status
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {history && history.length === 0 && (
-              <p className="text-sm text-slate-500">
-                Sem mudanças de status registradas.
-              </p>
-            )}
-            <ul className="space-y-2">
-              {history?.map((h) => (
-                <HistoryItem key={h.id} oldId={h.old_status_id} newId={h.new_status_id} at={h.changed_at} by={h.changed_by} />
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <AuditTimeline registroTipo="CONVENIO" registroId={c.id} />
 
         <CreatedBy created_by={c.created_by} created_at={c.created_at} updated_by={c.updated_by} updated_at={c.updated_at} />
 
@@ -276,37 +277,6 @@ function Info({
         <p className="truncate text-sm text-slate-900">{children}</p>
       </div>
     </div>
-  );
-}
-
-function HistoryItem({
-  oldId,
-  newId,
-  at,
-  by,
-}: {
-  oldId: string | null;
-  newId: string;
-  at: string;
-  by: string | null;
-}) {
-  const { data: catalog } = useStatusCatalog();
-  const { data: byProfile } = useProfileById(by);
-  const oldLabel = catalog?.find((s) => s.id === oldId)?.label ?? '—';
-  const newLabel = catalog?.find((s) => s.id === newId)?.label ?? '—';
-
-  return (
-    <li className="rounded-xl bg-slate-50 p-2 text-sm">
-      <div className="flex items-center justify-between">
-        <span className="font-medium text-slate-900">
-          {oldLabel} → {newLabel}
-        </span>
-        <span className="text-xs text-slate-500">{formatRelative(at)}</span>
-      </div>
-      <p className="mt-0.5 text-xs text-slate-500">
-        por {byProfile?.full_name ?? 'usuário'}
-      </p>
-    </li>
   );
 }
 
