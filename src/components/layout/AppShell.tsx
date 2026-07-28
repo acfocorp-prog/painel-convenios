@@ -2,6 +2,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
+import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { BottomNav } from './BottomNav';
 import { TopBar } from './TopBar';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -14,6 +15,9 @@ export function AppShell() {
   const navigate = useNavigate();
   const { user, isLoading } = useAuth();
   const { data: profile, isLoading: loadingProfile, error } = useProfile();
+  // Realtime: 1 channel global, invalida queries automaticamente quando
+  // outra pessoa cadastra/alterar/exclui algo. Sem polling, sem refetch manual.
+  useRealtimeInvalidation();
 
   useEffect(() => {
     if (!isLoading && !user) {
