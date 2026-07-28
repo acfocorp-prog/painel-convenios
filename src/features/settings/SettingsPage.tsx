@@ -25,6 +25,13 @@ import {
   useDeleteMessageTemplate,
   renderTemplate,
 } from '@/hooks/useMessageTemplates';
+import {
+  useConfigNumber,
+  useSetConfigNumber,
+  CONFIG_KEYS,
+  DEFAULT_LEMBRETE_DIAS,
+} from '@/hooks/useConfig';
+import { Bell } from 'lucide-react';
 import { formatRelative } from '@/lib/utils';
 
 export function SettingsPage() {
@@ -38,6 +45,7 @@ export function SettingsPage() {
       <div className="space-y-3 px-4">
         <BackupCard />
         <MessageTemplatesCard />
+        <LembreteCard />
         <ImportEscolasHint />
         <ProfileCard />
       </div>
@@ -217,6 +225,67 @@ function MessageTemplatesCard() {
             ))}
           </ul>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LembreteCard() {
+  const { data: dias = DEFAULT_LEMBRETE_DIAS } = useConfigNumber(
+    CONFIG_KEYS.LEMBRETE_DIAS,
+    DEFAULT_LEMBRETE_DIAS,
+  );
+  const setDias = useSetConfigNumber(CONFIG_KEYS.LEMBRETE_DIAS);
+  const [local, setLocal] = useState<number | null>(null);
+
+  const value = local ?? dias;
+
+  async function onSave() {
+    if (value < 0 || value > 90) {
+      toast.error('Escolha entre 0 e 90 dias');
+      return;
+    }
+    try {
+      await setDias.mutateAsync(value);
+      setLocal(null);
+      toast.success('Lembrete atualizado');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2">
+          <Bell className="h-4 w-4 text-brand-700" />
+          Lembrete de prazos
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <p className="text-sm text-slate-600">
+          Quantos dias antes do vencimento um registro aparece em "Próximos
+          prazos" na Visão geral.
+        </p>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={90}
+            value={value}
+            onChange={(e) => setLocal(Number(e.target.value))}
+            className="w-20"
+          />
+          <span className="text-sm text-slate-500">dias antes</span>
+          <Button
+            size="sm"
+            disabled={local === null || setDias.isPending}
+            onClick={onSave}
+            className="ml-auto"
+          >
+            Salvar
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

@@ -14,6 +14,7 @@ import { StatTile } from '@/components/overview/StatTile';
 import { DeadlineRow } from '@/components/overview/DeadlineRow';
 import { InstallBanner } from '@/components/shared/InstallBanner';
 import { useOverview } from '@/hooks/useOverview';
+import { RankingCard } from './RankingCard';
 
 export function OverviewPage() {
   const { data, isLoading } = useOverview();
@@ -110,6 +111,11 @@ export function OverviewPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* Ranking */}
+      <section className="px-4">
+        <RankingCard />
       </section>
 
       {/* Próximos */}
