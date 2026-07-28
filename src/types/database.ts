@@ -188,7 +188,7 @@ export interface Database {
       mandatos_tampao: {
         Row: {
           id: string;
-          escola_id: string;
+          escola_id: string | null;
           start_date: string;
           end_date: string;
           due_date: string | null;

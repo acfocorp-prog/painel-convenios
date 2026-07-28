@@ -277,11 +277,11 @@ create index bienios_due_idx
 -- 20260728000800_mandatos.sql
 -- ---------------------------------------------------------------------
 
--- Mandato tampão — mandato interino de uma escola.
+-- Mandato tampão — mandato interino de uma escola (ou da secretaria).
 
 create table public.mandatos_tampao (
   id uuid primary key default gen_random_uuid(),
-  escola_id uuid not null references public.escolas (id),
+  escola_id uuid references public.escolas (id),
   start_date date not null,
   end_date date not null,
   due_date date,
@@ -674,4 +674,11 @@ insert into public.message_templates (title, body) values
     'Olá, {{escola_nome}}! O biênio {{inicio}}-{{fim}} precisa da ata registrada em cartório até {{prazo}}. Pode confirmar o andamento?'
   )
 on conflict do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Migration 20260728001800_mandato_escola_nullable
+-- Mandato tampão pode ser da secretaria (escola_id NULL) ou de uma escola.
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.mandatos_tampao
+  ALTER COLUMN escola_id DROP NOT NULL;
 
