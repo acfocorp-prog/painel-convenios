@@ -48,6 +48,14 @@ const RSS_FEEDS: Array<{ url: string; source: string }> = [
   { url: 'https://www.gov.br/mec/rss.xml', source: 'MEC' },
 ];
 
+// Diário Oficial de Itaboraí/RJ — portal oficial (AdConvênios).
+// QD (Querido Diário) tem Itaboraí cadastrado mas sem dados scraped
+// (availability_date vazio). Então raspamos direto do portal municipal.
+const ITABORAI_DO_FEEDS: Array<{ url: string; label: string }> = [
+  { url: 'https://doeita.ad-convenios.com/', label: 'Itaboraí/RJ' },
+  { url: 'https://www.itaborai.rj.gov.br/diario-oficial/', label: 'Itaboraí/RJ (fallback)' },
+];
+
 // ─── HTTP helpers com timeout + retries ────────────────────────────────
 async function fetchJSON(url: string, init: RequestInit = {}): Promise<unknown> {
   let lastErr: Error | null = null;
@@ -245,6 +253,107 @@ async function fetchQueridoDiario(territories: string[], sinceISO: string): Prom
   return all.flat();
 }
 
+// ─── Diário Oficial de Itaboraí/RJ ────────────────────────────────────
+// QD (Querido Diário) tem Itaboraí cadastrado (3301900) mas sem dados
+// scraped (availability_date vazio). Então raspamos direto do portal
+// municipal. Tenta o host real primeiro (doeita.ad-convenios.com) e, se
+// falhar (DNS/rede), cai pra URL da prefeitura.
+async function fetchItaboraiDO(
+  feeds: Array<{ url: string; label: string }>,
+  collectDebug?: string[],
+): Promise<ParsedItem[]> {
+  // Hosts da Prefeitura de Itaboraí (doeita.ad-convenios.com e
+  // portal.ib.itaborai.rj.gov.br) estão em DNS interno municipal e não
+  // resolvem de redes públicas. Tentamos mesmo assim (best-effort) e
+  // logamos o erro se falhar — quando a infraestrutura resolver, o cron
+  // começa a coletar automaticamente sem precisar mexer em código.
+  const log = (m: string) => {
+    console.log(`[itaborai] ${m}`);
+    collectDebug?.push(m);
+  };
+  for (const feed of feeds) {
+    try {
+      const html = await fetchText(feed.url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; painel-convenios-cron/1.0; +github.com/acfocorp-prog/painel-convenios)',
+          Accept: 'text/html,application/xhtml+xml',
+        },
+      });
+      const items = await parseItaboraiList(html, feed.url, feed.label);
+      if (items.length > 0) {
+        log(`${feed.url} → ${items.length} itens`);
+        return items;
+      }
+    } catch (e) {
+      log(`${feed.url} falhou: ${(e as Error).message}`);
+    }
+  }
+  return [];
+}
+
+async function parseItaboraiList(html: string, baseUrl: string, label: string): Promise<ParsedItem[]> {
+  // Extrair todos os <a> com href + texto visível. Filtrar por palavras
+  // que pareçam edições/publicações/atos. Datas no formato BR (DD/MM/YYYY)
+  // ou ISO (YYYY-MM-DD).
+  const items: ParsedItem[] = [];
+  const anchorRe = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  const seen = new Set<string>();
+  const dateReBR = /\b(\d{2})\/(\d{2})\/(\d{4})\b/;
+  const dateReISO = /\b(\d{4})-(\d{2})-(\d{2})\b/;
+
+  while ((m = anchorRe.exec(html))) {
+    const attrs = m[1];
+    const text = (stripTags(m[2]) || '').replace(/\s+/g, ' ').trim();
+    if (text.length < 5 || text.length > 200) continue;
+    const hrefMatch = attrs.match(/href\s*=\s*["']([^"']+)["']/i);
+    if (!hrefMatch) continue;
+    const href = hrefMatch[1];
+    if (!/\.pdf$|diario|edicao|publicacao|download|visualizar|\/do\//i.test(href)) continue;
+
+    const hasDate = dateReBR.test(text) || dateReISO.test(text);
+    const looksLikeItem = /di[aá]rio|edi[cç][aã]o|publica[cç][aã]o|ato|portaria|decreto|lei|extrato|termo|aviso/i.test(text);
+    if (!hasDate && !looksLikeItem) continue;
+
+    let abs: string;
+    try {
+      abs = new URL(href, baseUrl).toString();
+    } catch {
+      continue;
+    }
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+
+    let dateISO: string | null = null;
+    const br = text.match(dateReBR);
+    if (br) dateISO = `${br[3]}-${br[2]}-${br[1]}`;
+    else {
+      const iso = text.match(dateReISO);
+      if (iso) dateISO = `${iso[1]}-${iso[2]}-${iso[3]}`;
+    }
+    if (!dateISO) dateISO = new Date().toISOString().slice(0, 10);
+
+    // Filtra janela retroativa pra não poluir o banco
+    const sinceMs = Date.now() - 60 * 86_400_000;
+    if (new Date(dateISO).getTime() < sinceMs) continue;
+
+    const { category, severity } = classify(`${label} ${text}`);
+    const extId = await sha1(`itaborai:${abs}`);
+    items.push({
+      title: `${label} — ${text.slice(0, 120)}`,
+      description: null,
+      source: 'PREFEITURA',
+      source_url: abs,
+      source_external_id: `PREFEITURA_ITABORAI:${extId}`,
+      category,
+      severity,
+      due_date: null,
+      published_at: dateISO,
+    });
+  }
+  return items.slice(0, 30);
+}
+
 Deno.serve(async () => {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
   const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -264,14 +373,20 @@ Deno.serve(async () => {
 
   console.log(`[fetch] desde=${sinceISO} · territórios=${territories.length}`);
 
-  const [qdItems, fndeItems, mecItems] = await Promise.all([
+  const debugItaborai: string[] = [];
+  const [qdItems, fndeItems, mecItems, itaboraiItems] = await Promise.all([
     fetchQueridoDiario(territories, sinceISO),
     fetchRSS(RSS_FEEDS[0].url, RSS_FEEDS[0].source),
     fetchRSS(RSS_FEEDS[1].url, RSS_FEEDS[1].source),
+    fetchItaboraiDO(ITABORAI_DO_FEEDS, debugItaborai),
   ]);
 
-  const all = [...qdItems, ...fndeItems, ...mecItems];
-  console.log(`[fetch] coletados: QD=${qdItems.length} FNDE=${fndeItems.length} MEC=${mecItems.length} total=${all.length}`);
+  const all = [...qdItems, ...fndeItems, ...mecItems, ...itaboraiItems];
+  console.log(
+    `[fetch] coletados: QD=${qdItems.length} FNDE=${fndeItems.length} MEC=${mecItems.length} ` +
+    `Itaboraí=${itaboraiItems.length} total=${all.length}`,
+  );
+  console.log(`[itaborai-debug] ${debugItaborai.join(' | ')}`);
 
   if (all.length === 0) {
     return new Response(JSON.stringify({ ok: true, inserted: 0 }), {
@@ -306,7 +421,19 @@ Deno.serve(async () => {
     });
   }
 
-  return new Response(JSON.stringify({ ok: true, inserted: rows.length }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      inserted: rows.length,
+      breakdown: {
+        qd: qdItems.length,
+        fnde: fndeItems.length,
+        mec: mecItems.length,
+        itaborai: itaboraiItems.length,
+      },
+      itaboraiDebug: debugItaborai,
+    }),
+    { headers: { 'Content-Type': 'application/json' } },
+  );
 });
+

@@ -18,9 +18,17 @@ aviso tem severidade (`INFO` / `ATENCAO` / `URGENTE`), categoria
   em uma aba reflete na outra.
 - **Cron automático**: pg_cron (Supabase) chama a Edge Function
   `fetch-deadlines` (Deno/TS) todo dia às 8h BRT. A function busca em
-  Querido Diário (D.O. municipais), FNDE RSS e MEC RSS, classifica por
-  categoria/severidade e faz upsert via Supabase REST + service-role key.
-  Ver `supabase/migrations/20260729000000_official_deadlines_pg_cron.sql`
+  **4 fontes**:
+  1. **Querido Diário** (D.O. municipais — default: 4 capitais SP/RJ/DF/BH,
+     configurável via env `QD_TERRITORY_IDS`).
+  2. **FNDE** RSS (`https://www.gov.br/fnde/rss.xml`).
+  3. **MEC** RSS (`https://www.gov.br/mec/rss.xml`).
+  4. **Scraper Itaboraí/RJ** (best-effort: tenta `doeita.ad-convenios.com` e
+     `www.itaborai.rj.gov.br/diario-oficial/` — atualmente retorna 0 porque
+     os hosts estão em DNS interno municipal sem resolução pública; quando
+     a infra da prefeitura expor DNS, o cron começa a coletar sozinho).
+  Classifica por categoria/severidade e faz upsert via Supabase REST +
+  service-role key. Ver `supabase/migrations/20260729000000_official_deadlines_pg_cron.sql`
   e `supabase/functions/fetch-deadlines/index.ts`. Também há o script
   Node equivalente em `scripts/fetch-official-deadlines.mjs` (caso queira
   rodar localmente). O `seed.sql` insere 8 avisos de exemplo pra UI já
