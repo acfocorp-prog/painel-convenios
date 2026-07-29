@@ -16,10 +16,15 @@ aviso tem severidade (`INFO` / `ATENCAO` / `URGENTE`), categoria
   urgentes, arquivados) e ações (marcar lido / arquivar).
 - **Realtime**: novo aviso aparece no sino de todos em 1-2s; marcar como lido
   em uma aba reflete na outra.
-- O cadastro é responsabilidade de uma rotina externa (cron). O workflow
-  `.github/workflows/fetch-official-deadlines.yml` já está estruturado mas
-  **desabilitado por padrão** até a fonte ser confirmada. O `seed.sql` insere
-  8 avisos de exemplo pra UI já ter conteúdo no primeiro deploy.
+- **Cron automático**: pg_cron (Supabase) chama a Edge Function
+  `fetch-deadlines` (Deno/TS) todo dia às 8h BRT. A function busca em
+  Querido Diário (D.O. municipais), FNDE RSS e MEC RSS, classifica por
+  categoria/severidade e faz upsert via Supabase REST + service-role key.
+  Ver `supabase/migrations/20260729000000_official_deadlines_pg_cron.sql`
+  e `supabase/functions/fetch-deadlines/index.ts`. Também há o script
+  Node equivalente em `scripts/fetch-official-deadlines.mjs` (caso queira
+  rodar localmente). O `seed.sql` insere 8 avisos de exemplo pra UI já
+  ter conteúdo no primeiro deploy.
 
 ## Pré-requisitos
 
@@ -102,7 +107,51 @@ supabase/
 - [x] Anexos no Storage do Supabase
 - [x] Backup JSON
 - [x] Templates de mensagem (placeholders + preview)
-- [x] Avisos oficiais (sino + mural no header, seed inicial, cron stub via GitHub Action)
+- [x] Avisos oficiais (sino + mural no header, seed inicial, cron ativo via pg_cron + Edge Function)
 - [ ] Botão de enviar modelos de mensagem (WhatsApp / e-mail)
 - [ ] Importação de Excel para outros módulos (convênios/SIMEC/biênios/mandatos)
-- [ ] Cron ativo de avisos (escolher fonte e ligar `.github/workflows/fetch-official-deadlines.yml`)
+
+## Setup do cron de avisos oficiais
+
+O cron roda dentro do Supabase (pg_cron + pg_net → Edge Function). Após
+subir as migrations no SQL Editor, **rode uma única vez** os passos
+abaixo para ligar:
+
+1. **Habilite as extensions** (Dashboard → Database → Extensions ou via SQL):
+   ```sql
+   create extension if not exists pg_cron;
+   create extension if not exists pg_net;
+   ```
+
+2. **Faça deploy da Edge Function** (a partir da raiz do repo):
+   ```bash
+   npx supabase functions deploy fetch-deadlines --no-verify-jwt
+   ```
+
+3. **Configure os secrets** da function (Dashboard → Edge Functions →
+   fetch-deadlines → Secrets):
+   - `SUPABASE_URL` — Project URL do Supabase
+   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase → Settings → API
+   - `QD_TERRITORY_IDS` (opcional) — CSV de códigos IBGE; default = 12 capitais
+   - `LOOKBACK_DAYS` (opcional) — janela retroativa; default = 14
+
+4. **Defina os settings** do banco (no SQL Editor) para o job do pg_cron
+   conseguir chamar a function:
+   ```sql
+   alter database "postgres" set app.functions_url      = 'https://SEU_PROJETO.supabase.co';
+   alter database "postgres" set app.service_role_key   = '<sua service_role_key>';
+   ```
+   (Não commitar a service_role key em lugar nenhum.)
+
+5. **Disparo manual** (a qualquer momento, do SQL Editor):
+   ```sql
+   select public.invoke_fetch_deadlines();
+   ```
+   Retorna um `request_id` do `pg_net`. A execução é assíncrona — ver
+   o resultado em `select * from net._http_response order by id desc limit 5;`.
+
+Para parar/remover o job:
+```sql
+select cron.unschedule('fetch-official-deadlines-daily');
+```
+

@@ -905,3 +905,50 @@ values
     current_date - interval '8 day'
   );
 
+-- ============================================================================
+-- 20260729000000_official_deadlines_pg_cron.sql
+-- Cron interno (Supabase pg_cron + pg_net) chamando a Edge Function
+-- `fetch-deadlines` diariamente às 8h BRT. Veja o arquivo de migration
+-- completo para os pré-requisitos e a função `public.invoke_fetch_deadlines()`.
+-- ============================================================================
+
+select cron.schedule(
+  'fetch-official-deadlines-daily',
+  '0 11 * * *',
+  $$
+  select net.http_post(
+    url     := current_setting('app.functions_url', true)
+              || '/functions/v1/fetch-deadlines',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('app.service_role_key', true)
+    ),
+    body    := '{}'::jsonb
+  );
+  $$
+);
+
+create or replace function public.invoke_fetch_deadlines()
+returns bigint
+language plpgsql
+security definer
+as $$
+declare
+  request_id bigint;
+begin
+  select net.http_post(
+    url     := current_setting('app.functions_url', true)
+              || '/functions/v1/fetch-deadlines',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('app.service_role_key', true)
+    ),
+    body    := '{}'::jsonb
+  ) into request_id;
+  return request_id;
+end;
+$$;
+
+comment on function public.invoke_fetch_deadlines()
+  is 'Dispara a Edge Function fetch-deadlines manualmente. Retorna o request_id do pg_net.';
+
