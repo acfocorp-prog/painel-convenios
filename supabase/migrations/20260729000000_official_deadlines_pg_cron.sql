@@ -4,9 +4,10 @@
 -- pg_net → chama a Edge Function `fetch-deadlines` (Deno/TypeScript,
 -- código em `supabase/functions/fetch-deadlines/index.ts`).
 --
--- Edge Function roda o mesmo `scripts/fetch-official-deadlines.mjs`
--- (transcrito para Deno), com SUPABASE_SERVICE_ROLE_KEY + URL vindos
--- dos secrets da própria function.
+-- Edge Function foi deployada com `--no-verify-jwt`, então a chamada do
+-- pg_net.http_post não precisa de Authorization header — o env var
+-- `SUPABASE_SERVICE_ROLE_KEY` da própria function é auto-injetado pelo
+-- Supabase no momento do deploy (ver docs: Edge Functions Secrets).
 --
 -- PRÉ-REQUISITOS PARA A EQUIPE (1 vez):
 --   1. Habilitar extensions no Supabase Dashboard → Database → Extensions:
@@ -17,34 +18,32 @@
 --   2. Aplicar esta migration no SQL Editor.
 --   3. Fazer deploy da Edge Function (a partir da raiz do repo):
 --        npx supabase functions deploy fetch-deadlines --no-verify-jwt
---   4. Definir os secrets da Edge Function (no Dashboard → Edge Functions
---      → fetch-deadlines → Secrets):
---        - SUPABASE_URL            ex.: https://abc.supabase.co
---        - SUPABASE_SERVICE_ROLE_KEY
+--   4. (Opcional) Configurar secrets customizados da Edge Function
+--      (Dashboard → Edge Functions → fetch-deadlines → Secrets):
 --        - QD_TERRITORY_IDS        CSV opcional de IBGE codes
 --        - LOOKBACK_DAYS           opcional, default 14
---   5. (Opcional) Para gatilho manual via Dashboard: ver função
+--      (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY são auto-injetados pelo
+--      Supabase — não precisam ser setados manualmente.)
+--   5. Para gatilho manual via Dashboard: ver função
 --      public.invoke_fetch_deadlines() abaixo.
 
 -- pg_cron schedule: 0 11 * * * UTC = 8h BRT (BRT é UTC-3, sem horário de verão).
--- Usamos 'America/Sao_Paulo' pra evitar confusão com horário de verão.
+-- timeout_milliseconds := 60s (pg_net default é 5s; a function leva ~4s
+-- sem cold start, então 60s dá margem pra cold start + retries).
 select cron.schedule(
   'fetch-official-deadlines-daily',
   '0 11 * * *',
   $$
   select net.http_post(
-    url     := current_setting('app.functions_url', true)
-              || '/functions/v1/fetch-deadlines',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key', true)
-    ),
-    body    := '{}'::jsonb
+    url     := 'https://itvjxesfoginvxltutws.supabase.co/functions/v1/fetch-deadlines',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body    := '{}'::jsonb,
+    timeout_milliseconds := 60000
   );
   $$
 );
 
--- Função helper pra invocar manualmente (do SQL Editor ou de um botão no app):
+-- Função helper pra invocar manualmente (do SQL Editor):
 create or replace function public.invoke_fetch_deadlines()
 returns bigint
 language plpgsql
@@ -54,13 +53,10 @@ declare
   request_id bigint;
 begin
   select net.http_post(
-    url     := current_setting('app.functions_url', true)
-              || '/functions/v1/fetch-deadlines',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key', true)
-    ),
-    body    := '{}'::jsonb
+    url     := 'https://itvjxesfoginvxltutws.supabase.co/functions/v1/fetch-deadlines',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body    := '{}'::jsonb,
+    timeout_milliseconds := 60000
   ) into request_id;
   return request_id;
 end;
@@ -68,10 +64,3 @@ $$;
 
 comment on function public.invoke_fetch_deadlines()
   is 'Dispara a Edge Function fetch-deadlines manualmente. Retorna o request_id do pg_net.';
-
--- Guarda a URL base do projeto e a service_role key em "settings" do database
--- pra os jobs do pg_cron conseguirem ler. A função abaixo é chamada por um
--- trigger na primeira execução; ou a equipe pode rodar manualmente:
---   alter database current set app.functions_url = 'https://abc.supabase.co';
---   alter database current set app.service_role_key = '<service_role_key>';
--- Os secrets acima JAMAIS devem ser commitados no repo — só no SQL Editor.

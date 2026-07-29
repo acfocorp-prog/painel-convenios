@@ -21,16 +21,8 @@
 const DEFAULT_TERRITORIES = [
   '3550308', // São Paulo
   '3304557', // Rio de Janeiro
-  '5300108', // Brasília
-  '2304400', // Fortaleza
-  '2927408', // Salvador
+  '5300108', // Brasília (DF)
   '3106200', // Belo Horizonte
-  '1302603', // Manaus
-  '4106902', // Curitiba
-  '2611606', // Recife
-  '5208707', // Goiânia
-  '1501402', // Belém
-  '4314902', // Porto Alegre
 ];
 
 const CATEGORY_RULES: Array<{ cat: string; keys: string[] }> = [
@@ -151,7 +143,7 @@ interface ParsedItem {
   published_at: string;
 }
 
-function parseRSS(xml: string, source: string): ParsedItem[] {
+async function parseRSS(xml: string, source: string): Promise<ParsedItem[]> {
   const items: ParsedItem[] = [];
   const itemRe = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
   let m: RegExpExecArray | null;
@@ -172,12 +164,13 @@ function parseRSS(xml: string, source: string): ParsedItem[] {
       ? new Date(pubDate).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
     const { category, severity } = classify(`${title} ${description || ''}`);
+    const extId = await sha1(url);
     items.push({
       title,
       description: description ? description.slice(0, 500) : null,
       source,
       source_url: url,
-      source_external_id: `${source}:${await sha1(url)}`,
+      source_external_id: `${source}:${extId}`,
       category,
       severity,
       due_date: null,
@@ -195,7 +188,7 @@ async function fetchRSS(url: string, source: string): Promise<ParsedItem[]> {
         Accept: '*/*',
       },
     });
-    return parseRSS(xml, source);
+    return await parseRSS(xml, source);
   } catch (e) {
     console.warn(`[${source}] falhou: ${(e as Error).message}`);
     return [];
@@ -203,9 +196,11 @@ async function fetchRSS(url: string, source: string): Promise<ParsedItem[]> {
 }
 
 async function fetchQueridoDiario(territories: string[], sinceISO: string): Promise<ParsedItem[]> {
-  const items: ParsedItem[] = [];
-  for (const territory of territories) {
-    for (const bag of QD_QUERY_BAGS) {
+  // Paraleliza todos os pares (território × query_bag) pra caber no timeout
+  // do pg_net.http_post (5s por padrão). 4 territórios × 5 bags = 20 chamadas
+  // simultâneas; cada QD retorna ≤15 itens.
+  const fetches = territories.flatMap((territory) =>
+    QD_QUERY_BAGS.map(async (bag) => {
       const u = new URL('https://api.queridodiario.ok.org.br/gazettes/');
       u.searchParams.set('querystring', bag.q);
       u.searchParams.set('territory_ids', territory);
@@ -220,13 +215,14 @@ async function fetchQueridoDiario(territories: string[], sinceISO: string): Prom
             Accept: 'application/json',
           },
         })) as { gazettes?: Array<{ date: string; url: string; territory_name?: string; excerpts?: string[] }> };
+        const out: ParsedItem[] = [];
         for (const g of data.gazettes || []) {
           const excerpt = (g.excerpts?.[0] || '').slice(0, 500);
           const date = g.date;
           const text = `${g.territory_name || ''} ${excerpt}`.trim();
           const { category, severity } = classify(text);
           const extId = await sha1(`qd:${territory}:${date}:${bag.tag}:${g.url || ''}`);
-          items.push({
+          out.push({
             title: `${g.territory_name || 'Município'} — Diário Oficial ${date}`,
             description: excerpt || null,
             source: 'QUERIDO_DIARIO',
@@ -238,12 +234,15 @@ async function fetchQueridoDiario(territories: string[], sinceISO: string): Prom
             published_at: date,
           });
         }
+        return out;
       } catch (e) {
         console.warn(`[qd] ${territory}/${bag.tag} falhou: ${(e as Error).message}`);
+        return [];
       }
-    }
-  }
-  return items;
+    }),
+  );
+  const all = await Promise.all(fetches);
+  return all.flat();
 }
 
 Deno.serve(async () => {

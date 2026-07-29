@@ -128,22 +128,13 @@ abaixo para ligar:
    npx supabase functions deploy fetch-deadlines --no-verify-jwt
    ```
 
-3. **Configure os secrets** da function (Dashboard → Edge Functions →
-   fetch-deadlines → Secrets):
-   - `SUPABASE_URL` — Project URL do Supabase
-   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase → Settings → API
+3. **Configure os secrets opcionais** da function (Dashboard → Edge Functions
+   → fetch-deadlines → Secrets). Os 2 primeiros já são auto-injetados pelo
+   Supabase, então só precisa se quiser customizar território/janela:
    - `QD_TERRITORY_IDS` (opcional) — CSV de códigos IBGE; default = 12 capitais
    - `LOOKBACK_DAYS` (opcional) — janela retroativa; default = 14
 
-4. **Defina os settings** do banco (no SQL Editor) para o job do pg_cron
-   conseguir chamar a function:
-   ```sql
-   alter database "postgres" set app.functions_url      = 'https://SEU_PROJETO.supabase.co';
-   alter database "postgres" set app.service_role_key   = '<sua service_role_key>';
-   ```
-   (Não commitar a service_role key em lugar nenhum.)
-
-5. **Disparo manual** (a qualquer momento, do SQL Editor):
+4. **Disparo manual** (a qualquer momento, do SQL Editor):
    ```sql
    select public.invoke_fetch_deadlines();
    ```

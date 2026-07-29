@@ -908,8 +908,10 @@ values
 -- ============================================================================
 -- 20260729000000_official_deadlines_pg_cron.sql
 -- Cron interno (Supabase pg_cron + pg_net) chamando a Edge Function
--- `fetch-deadlines` diariamente às 8h BRT. Veja o arquivo de migration
--- completo para os pré-requisitos e a função `public.invoke_fetch_deadlines()`.
+-- `fetch-deadlines` diariamente às 8h BRT. A Edge Function é deployada com
+-- `--no-verify-jwt`, então a chamada do pg_net.http_post não precisa de
+-- Authorization — SUPABASE_URL/SERVICE_ROLE_KEY são auto-injetados no
+-- runtime da function.
 -- ============================================================================
 
 select cron.schedule(
@@ -917,13 +919,10 @@ select cron.schedule(
   '0 11 * * *',
   $$
   select net.http_post(
-    url     := current_setting('app.functions_url', true)
-              || '/functions/v1/fetch-deadlines',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key', true)
-    ),
-    body    := '{}'::jsonb
+    url     := 'https://itvjxesfoginvxltutws.supabase.co/functions/v1/fetch-deadlines',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body    := '{}'::jsonb,
+    timeout_milliseconds := 60000
   );
   $$
 );
@@ -937,13 +936,10 @@ declare
   request_id bigint;
 begin
   select net.http_post(
-    url     := current_setting('app.functions_url', true)
-              || '/functions/v1/fetch-deadlines',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key', true)
-    ),
-    body    := '{}'::jsonb
+    url     := 'https://itvjxesfoginvxltutws.supabase.co/functions/v1/fetch-deadlines',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body    := '{}'::jsonb,
+    timeout_milliseconds := 60000
   ) into request_id;
   return request_id;
 end;
