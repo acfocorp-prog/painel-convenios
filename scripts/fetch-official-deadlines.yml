@@ -1,0 +1,82 @@
+# Busca automática de avisos oficiais em fontes públicas (FNDE, MEC, DOU,
+# Diário Oficial municipal) e grava em `public.official_deadlines`.
+#
+# ─────────────────────────────────────────────────────────────────────────
+# STATUS: STUB (desabilitado por padrão).
+#
+# Este workflow está estruturado mas NÃO roda (step de fetch tem `if: false`).
+# A escolha de fonte é frágil: Querido Diário tem proteção Cloudflare que
+# bloqueia requisições não-browser; FNDE/MEC não têm API pública estável;
+# IN.gov.br exige CSRF token + scraping estruturado.
+#
+# Quando a equipe decidir a fonte, siga estes passos:
+#  1. Edite `scripts/fetch-official-deadlines.mjs` (a ser criado) com a
+#     estratégia de fetch escolhida e o mapping de campos externos para as
+#     colunas da tabela `official_deadlines`:
+#       title, description, source, source_url, source_external_id,
+#       category, severity, due_date, published_at
+#     Use upsert via Supabase REST com SUPABASE_SERVICE_ROLE_KEY (NUNCA exponha
+#     a service role key no front-end).
+#  2. Configure os secrets no GitHub:
+#       - VITE_SUPABASE_URL          (mesmo do front)
+#       - SUPABASE_SERVICE_ROLE_KEY  (encontre em Supabase → Settings → API;
+#                                     diferente da anon key)
+#  3. Remova o `if: ${{ false }}` do step "Buscar avisos".
+#  4. Ajuste o cron (atual: 0 11 * * * UTC = 8h BRT, todo dia).
+# ─────────────────────────────────────────────────────────────────────────
+
+name: Fetch official deadlines
+
+on:
+  schedule:
+    # 0 11 UTC = 8h BRT (BRT é UTC-3, sem horário de verão)
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: official-deadlines-fetch
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ─── STUB: este step está desabilitado até a fonte ser definida.
+      - name: Buscar avisos (DESABILITADO — veja topo do arquivo)
+        if: ${{ false }}
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "TODO: implementar fetch e upsert"
+          echo "Exemplo: node scripts/fetch-official-deadlines.mjs"
+
+      # ─── Step sempre ativo: valida que os secrets existem.
+      # Falha alto se faltarem, mesmo com o fetch desabilitado, pra equipe
+      # lembrar de configurar quando ligar.
+      - name: Validar secrets configurados
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::error::Secret VITE_SUPABASE_URL ausente."
+            exit 1
+          fi
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::Secret SUPABASE_SERVICE_ROLE_KEY ausente — o fetch vai falhar quando ligado."
+          else
+            echo "✓ Secrets OK"
+          fi

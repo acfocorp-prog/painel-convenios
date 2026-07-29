@@ -27,6 +27,7 @@ const TABLES = [
   'profiles',
   'verba_tipos',
   'status_catalog',
+  'official_deadlines',
 ] as const;
 
 type TableName = (typeof TABLES)[number];

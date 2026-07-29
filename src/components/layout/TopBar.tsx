@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { initialsOf } from '@/lib/utils';
+import { OfficialDeadlinesBell } from './OfficialDeadlinesBell';
 
 export function TopBar() {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-1">
+        <OfficialDeadlinesBell />
         <Button
           variant="ghost"
           size="icon"

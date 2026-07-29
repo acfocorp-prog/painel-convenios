@@ -28,6 +28,11 @@ const TABLE_INVALIDATIONS: Record<string, string[][]> = {
   bienios: [['bienios'], ['overview'], ['concluidos']],
   mandatos_tampao: [['mandatos'], ['overview'], ['concluidos']],
   status_history: [['status_history']],
+  official_deadlines: [['official_deadlines'], ['official_deadlines_unread']],
+  official_deadline_reads: [
+    ['official_deadlines'],
+    ['official_deadlines_unread'],
+  ],
 };
 
 const REALTIME_EVENT = 'postgres_changes' as const;

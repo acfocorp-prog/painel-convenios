@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
+  Bell,
   Database,
   Download,
   FileSpreadsheet,
   Mail,
+  Megaphone,
   Plus,
   Settings as SettingsIcon,
   Trash2,
@@ -31,7 +34,7 @@ import {
   CONFIG_KEYS,
   DEFAULT_LEMBRETE_DIAS,
 } from '@/hooks/useConfig';
-import { Bell } from 'lucide-react';
+import { useUnreadCount } from '@/hooks/useOfficialDeadlines';
 import { formatRelative } from '@/lib/utils';
 
 export function SettingsPage() {
@@ -43,6 +46,7 @@ export function SettingsPage() {
       />
 
       <div className="space-y-3 px-4">
+        <AvisosOficiaisCard />
         <BackupCard />
         <MessageTemplatesCard />
         <LembreteCard />
@@ -50,6 +54,41 @@ export function SettingsPage() {
         <ProfileCard />
       </div>
     </div>
+  );
+}
+
+function AvisosOficiaisCard() {
+  const navigate = useNavigate();
+  const { data: unread = 0 } = useUnreadCount();
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2">
+          <Megaphone className="h-4 w-4 text-brand-700" />
+          Avisos oficiais
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <p className="text-sm text-slate-600">
+          Mural de prazos publicados no Diário Oficial, FNDE, MEC e outras
+          fontes oficiais. Toque no sino no topo a qualquer momento para ver os
+          últimos avisos.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => navigate('/avisos-oficiais')}
+          className="w-full"
+        >
+          <Bell className="h-4 w-4" />
+          Abrir avisos oficiais
+          {unread > 0 && (
+            <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[10px] font-semibold text-white">
+              {unread > 99 ? '99+' : unread}
+            </span>
+          )}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -1,13 +1,14 @@
 ﻿-- =====================================================================
 -- PAINEL DE CONVÊNIOS — SETUP COMPLETO DO SUPABASE
 -- =====================================================================
--- Gerado a partir dos 18 arquivos em supabase/migrations/.
+-- Gerado a partir dos 21 arquivos em supabase/migrations/.
 -- Cole este arquivo inteiro no SQL Editor do Supabase e clique Run.
 --
 -- Ordem importa: extensions → enums → profiles → lookups → escolas
 --   → convenios → simec → bienios → mandatos → status_history
 --   → attachments → school_notes → process_links → message_templates
---   → config → triggers → rls → seed
+--   → config → triggers → rls → seed → mandato_escola_nullable
+--   → official_deadlines → official_deadlines_rls → official_deadlines_seed
 --
 -- Idempotente? Não — rode uma vez só em projeto novo.
 -- =====================================================================
@@ -681,4 +682,226 @@ on conflict do nothing;
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.mandatos_tampao
   ALTER COLUMN escola_id DROP NOT NULL;
+
+
+-- ---------------------------------------------------------------------
+-- 20260728001900_official_deadlines.sql
+-- ---------------------------------------------------------------------
+
+-- Avisos oficiais de fontes externas (FNDE, MEC, DOU, Querido Diário, etc.).
+-- Cadastro é responsabilidade de uma rotina externa (cron / seed); o app só
+-- lê, marca como lido por usuário e arquiva.
+
+create table public.official_deadlines (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  source text not null check (source in (
+    'DOU',               -- Diário Oficial da União
+    'FNDE',              -- comunicados / editais do FNDE
+    'MEC',               -- portarias / editais do MEC
+    'PREFEITURA',        -- Diário Oficial do município
+    'QUERIDO_DIARIO',    -- scraped via Querido Diário
+    'OUTRO'
+  )),
+  source_url text,
+  -- Quando o cron popular via API externa, este id evita inserir duplicado.
+  source_external_id text,
+  category text not null check (category in (
+    'CONVENIO',
+    'SIMEC',
+    'BIENIO',
+    'MANDATO',
+    'GERAL'
+  )),
+  severity text not null default 'INFO' check (severity in (
+    'INFO',
+    'ATENCAO',
+    'URGENTE'
+  )),
+  due_date date,
+  published_at date not null default current_date,
+  is_archived boolean not null default false,
+  created_at timestamptz not null default now(),
+  -- Permite ter o mesmo external_id repetido entre fontes diferentes.
+  unique (source, source_external_id)
+);
+
+create index official_deadlines_published_idx
+  on public.official_deadlines (published_at desc);
+create index official_deadlines_active_idx
+  on public.official_deadlines (is_archived, published_at desc);
+
+-- Leituras por usuário (cada pessoa marca o que já viu).
+create table public.official_deadline_reads (
+  deadline_id uuid not null references public.official_deadlines (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  read_at timestamptz not null default now(),
+  primary key (deadline_id, user_id)
+);
+
+create index official_deadline_reads_user_idx
+  on public.official_deadline_reads (user_id, read_at desc);
+
+
+-- ---------------------------------------------------------------------
+-- 20260728002000_official_deadlines_rls.sql
+-- ---------------------------------------------------------------------
+
+-- RLS das tabelas official_deadlines + official_deadline_reads.
+-- Mesma política das outras tabelas de negócio: todos autenticados podem tudo.
+-- Leituras são per-user (outros usuários não veem o que eu marquei).
+
+alter table public.official_deadlines enable row level security;
+
+create policy "official_deadlines_r"
+  on public.official_deadlines for select
+  to authenticated
+  using (true);
+
+create policy "official_deadlines_i"
+  on public.official_deadlines for insert
+  to authenticated
+  with check (true);
+
+create policy "official_deadlines_u"
+  on public.official_deadlines for update
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "official_deadlines_d"
+  on public.official_deadlines for delete
+  to authenticated
+  using (true);
+
+alter table public.official_deadline_reads enable row level security;
+
+create policy "official_deadline_reads_r"
+  on public.official_deadline_reads for select
+  to authenticated
+  using (true);
+
+create policy "official_deadline_reads_i"
+  on public.official_deadline_reads for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "official_deadline_reads_d"
+  on public.official_deadline_reads for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+
+-- ---------------------------------------------------------------------
+-- 20260728002100_official_deadlines_seed.sql
+-- ---------------------------------------------------------------------
+
+-- Seed de avisos oficiais de exemplo.
+-- Estes são avisos plausíveis baseados em publicações reais típicas de
+-- programas federais / municipais de educação. Servem pra UI ter conteúdo
+-- desde o primeiro deploy, antes do cron popular via API.
+-- Quando o cron popular via (source, source_external_id), upsert mantém estes
+-- e só atualiza o que mudou.
+
+insert into public.official_deadlines
+  (title, description, source, source_url, source_external_id, category, severity, due_date, published_at)
+values
+  -- CONVÊNIO
+  (
+    'FNDE — Prestação de contas do PDDE 2025',
+    'Entes federados devem enviar a prestação de contas do PDDE referente ao exercício de 2025 pelo SIMEC até a data indicada.',
+    'FNDE',
+    'https://www.gov.br/fnde/pt-br/assuntos/programas/pdde',
+    'fnde-pdde-2025-prestacao',
+    'CONVENIO',
+    'URGENTE',
+    current_date + interval '14 day',
+    current_date - interval '5 day'
+  ),
+  (
+    'DOU — Portaria sobre repasses do PNAE 2026',
+    'Portaria do FNDE que define o calendário e valores per-capita do PNAE para o exercício de 2026.',
+    'DOU',
+    'https://www.in.gov.br/consulta/-/buscar/dou?q=PNAE+2026',
+    'dou-pnae-2026-portaria',
+    'CONVENIO',
+    'ATENCAO',
+    current_date + interval '30 day',
+    current_date - interval '2 day'
+  ),
+  (
+    'FNDE — Edital PNATE 2026',
+    'Edital de adesão ao PNATE para o exercício de 2026 — transporte escolar rural.',
+    'FNDE',
+    'https://www.gov.br/fnde/pt-br/assuntos/programas/pnate',
+    'fnde-pnate-2026-edital',
+    'CONVENIO',
+    'INFO',
+    current_date + interval '45 day',
+    current_date - interval '1 day'
+  ),
+
+  -- SIMEC
+  (
+    'MEC — Prazo de validação de adesões SIMEC 2026',
+    'Confirmação das adesões dos programas PDE Escola / PDDE Interativo no SIMEC pelas secretarias municipais.',
+    'MEC',
+    'https://www.gov.br/mec/pt-br',
+    'mec-simec-2026-validacao',
+    'SIMEC',
+    'ATENCAO',
+    current_date + interval '20 day',
+    current_date - interval '3 day'
+  ),
+
+  -- BIÊNIO
+  (
+    'Prefeitura — Cronograma bienal de diretores 2026/2027',
+    'Decreto municipal definindo o cronograma do processo bienal de escolha de diretores para o ciclo 2026/2027.',
+    'PREFEITURA',
+    'https://queridodiario.ok.org.br/',
+    'pref-bienio-2026-2027-cronograma',
+    'BIENIO',
+    'URGENTE',
+    current_date + interval '60 day',
+    current_date - interval '7 day'
+  ),
+
+  -- MANDATO
+  (
+    'Prefeitura — Regulamentação de mandato tampão',
+    'Instrução normativa sobre designação de diretores em caráter temporário durante vacância.',
+    'PREFEITURA',
+    'https://queridodiario.ok.org.br/',
+    'pref-mandato-tampao-in',
+    'MANDATO',
+    'INFO',
+    null,
+    current_date - interval '10 day'
+  ),
+
+  -- GERAL
+  (
+    'Querido Diário — Atualização de monitor de prazos',
+    'Projeto Querido Diário ampliou cobertura de municípios e passou a indexar diários a partir de 2018.',
+    'QUERIDO_DIARIO',
+    'https://queridodiario.ok.org.br/',
+    'qd-novidades-2026-07',
+    'GERAL',
+    'INFO',
+    null,
+    current_date - interval '4 day'
+  ),
+  (
+    'FNDE — Comunicado sobre censo escolar 2026',
+    'Orientações da DIRAE/FNDE sobre o preenchimento do censo escolar da educação básica 2026.',
+    'FNDE',
+    'https://www.gov.br/fnde/pt-br/assuntos/programas/pdde',
+    'fnde-censo-2026-comunicado',
+    'GERAL',
+    'ATENCAO',
+    current_date + interval '90 day',
+    current_date - interval '8 day'
+  );
 

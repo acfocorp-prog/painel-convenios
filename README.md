@@ -4,6 +4,23 @@ PWA da Secretaria de Educação para acompanhamento de Convênios, SIMEC, Biêni
 
 > Status: **MVP em desenvolvimento**. Auth + Escolas + Convênios + Visão Geral + PWA. Módulos SIMEC/Biênio/Mandato, import de planilhas e realtime entram em iterações seguintes.
 
+## Avisos oficiais (sino no header)
+
+Um sino no topo mostra prazos publicados em fontes oficiais (FNDE, MEC, Diário
+Oficial da União, Diário Oficial do município, Querido Diário, etc.). Cada
+aviso tem severidade (`INFO` / `ATENCAO` / `URGENTE`), categoria
+(`CONVENIO` / `SIMEC` / `BIENIO` / `MANDATO` / `GERAL`) e link para a fonte.
+
+- **Sino + popover** com os 10 últimos não-lidos e botão "marcar todos".
+- **Página `/avisos-oficiais`** com lista completa, filtros (fonte, categoria,
+  urgentes, arquivados) e ações (marcar lido / arquivar).
+- **Realtime**: novo aviso aparece no sino de todos em 1-2s; marcar como lido
+  em uma aba reflete na outra.
+- O cadastro é responsabilidade de uma rotina externa (cron). O workflow
+  `.github/workflows/fetch-official-deadlines.yml` já está estruturado mas
+  **desabilitado por padrão** até a fonte ser confirmada. O `seed.sql` insere
+  8 avisos de exemplo pra UI já ter conteúdo no primeiro deploy.
+
 ## Pré-requisitos
 
 - Node.js **20 LTS** ou superior
@@ -78,10 +95,14 @@ supabase/
 ## Roadmap
 
 - [x] **MVP** — Auth, Escolas, Convênios, Visão Geral, PWA
-- [ ] SIMEC, Biênio, Mandato Tampão
-- [ ] Importação de Excel (escolas + biênios)
-- [ ] Realtime entre usuários
-- [ ] Templates de mensagem + botão de enviar
-- [ ] Ranking de escolas atrasadas
-- [ ] Anexos no Storage do Supabase
-- [ ] Backup JSON
+- [x] SIMEC, Biênio, Mandato Tampão
+- [x] Importação de Excel (escolas)
+- [x] Realtime entre usuários
+- [x] Ranking de escolas atrasadas
+- [x] Anexos no Storage do Supabase
+- [x] Backup JSON
+- [x] Templates de mensagem (placeholders + preview)
+- [x] Avisos oficiais (sino + mural no header, seed inicial, cron stub via GitHub Action)
+- [ ] Botão de enviar modelos de mensagem (WhatsApp / e-mail)
+- [ ] Importação de Excel para outros módulos (convênios/SIMEC/biênios/mandatos)
+- [ ] Cron ativo de avisos (escolher fonte e ligar `.github/workflows/fetch-official-deadlines.yml`)

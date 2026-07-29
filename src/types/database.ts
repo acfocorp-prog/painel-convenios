@@ -327,6 +327,57 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['config']['Row']>;
         Relationships: [];
       };
+      official_deadlines: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          source:
+            | 'DOU'
+            | 'FNDE'
+            | 'MEC'
+            | 'PREFEITURA'
+            | 'QUERIDO_DIARIO'
+            | 'OUTRO';
+          source_url: string | null;
+          source_external_id: string | null;
+          category: 'CONVENIO' | 'SIMEC' | 'BIENIO' | 'MANDATO' | 'GERAL';
+          severity: 'INFO' | 'ATENCAO' | 'URGENTE';
+          due_date: string | null;
+          published_at: string;
+          is_archived: boolean;
+          created_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['official_deadlines']['Row'],
+          'id' | 'created_at' | 'is_archived'
+        > & {
+          id?: string;
+          created_at?: string;
+          is_archived?: boolean;
+        };
+        Update: Partial<
+          Database['public']['Tables']['official_deadlines']['Row']
+        >;
+        Relationships: [];
+      };
+      official_deadline_reads: {
+        Row: {
+          deadline_id: string;
+          user_id: string;
+          read_at: string;
+        };
+        Insert: Partial<
+          Database['public']['Tables']['official_deadline_reads']['Row']
+        > & {
+          deadline_id: string;
+          user_id: string;
+        };
+        Update: Partial<
+          Database['public']['Tables']['official_deadline_reads']['Row']
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
