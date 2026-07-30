@@ -2,18 +2,26 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { importFromExcel, ESCOLA_IMPORT_COLUMNS } from '@/lib/excel';
 import { useAuth } from './useAuth';
+import type { Database } from '@/types/database';
 
 /**
- * Importa planilha de escolas a partir de um File .xlsx.
+ * Importa planilha de escolas a partir de um File .xlsx/.xls(HTML).
+ *
+ * Aceita tanto:
+ *  - xlsx "padrão" (Excel/Sheets) com colunas INEP/Nome/Ativo
+ *  - HTML do modelo FNDE "Situação Cadastral das Entidades" (salvo como
+ *    .xls pelo FNDE) com 18 colunas incluindo DDD/Telefone, Email, CNPJ
+ *    EEX/UEX, Rede, Localização, Mandato Dirigente e Data Fim do Mandato.
  *
  * Estratégia:
- *  1. Lê planilha (exceljs, header-tolerant).
+ *  1. Lê planilha (parser dual em lib/excel.ts).
  *  2. Filtra linhas com erro de coerce OU campos obrigatórios faltando.
- *  3. Faz 1 bulk-insert com todas as linhas válidas.
- *  4. Quando o Supabase retornar unique_violation (INEP duplicado),
+ *  3. Monta `phone` a partir de `phone_ddd` + `phone` quando vierem separados.
+ *  4. Faz 1 bulk-insert com todas as linhas válidas.
+ *  5. Quando o Supabase retornar unique_violation (INEP duplicado),
  *     identifica quais INEPs colidiram e faz fallback com insert 1-a-1
  *     pra reportar precisamente cada linha pulada.
- *  5. Retorna { inserted: number, skipped: { rowIndex, reason }[] }.
+ *  6. Retorna { inserted, skipped, total, parseErrors }.
  *
  * Não sobrescreve INEP existente — política é skip + report.
  */
@@ -33,6 +41,23 @@ export interface ImportResult {
   }>;
 }
 
+/**
+ * Monta o telefone final: se vier `phone_ddd` + `phone` separados, concatena
+ * só dígitos. Se só vier um dos dois, usa o que tem.
+ */
+function buildPhone(ddd: unknown, phone: unknown): string | null {
+  const dddStr = ddd != null ? String(ddd).replace(/\D/g, '') : '';
+  const phoneStr = phone != null ? String(phone).replace(/\D/g, '') : '';
+  if (!dddStr && !phoneStr) return null;
+  return `${dddStr}${phoneStr}` || null;
+}
+
+/** Limpa string: trim + remove aspas/colchete inicial comum em CSVs do FNDE. */
+function clean(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return String(value).replace(/^'/, '').trim() || null;
+}
+
 export function useImportEscolas() {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -42,15 +67,21 @@ export function useImportEscolas() {
       const rows = await importFromExcel(file, ESCOLA_IMPORT_COLUMNS);
 
       const parseErrors: ImportResult['parseErrors'] = [];
-      const validRows: Array<{ rowIndex: number; inep: string; name: string; active: boolean }> = [];
+      const validRows: Array<{
+        rowIndex: number;
+        inep: string;
+        name: string;
+        active: boolean;
+        payload: Record<string, unknown>;
+      }> = [];
 
       for (const r of rows) {
         if (r.errors.length > 0) {
           parseErrors.push({ rowIndex: r.rowIndex, reason: r.errors.join('; ') });
           continue;
         }
-        const inep = String(r.data.inep ?? '').trim();
-        const name = String(r.data.name ?? '').trim();
+        const inep = clean(r.data.inep) ?? '';
+        const name = clean(r.data.name) ?? '';
         const active = (r.data.active as boolean | null) ?? true;
 
         if (!inep || !name) {
@@ -61,7 +92,23 @@ export function useImportEscolas() {
           continue;
         }
 
-        validRows.push({ rowIndex: r.rowIndex, inep, name, active });
+        const phone = buildPhone(r.data.phone_ddd, r.data.phone);
+
+        const payload: Record<string, unknown> = {
+          inep,
+          name,
+          active,
+          phone,
+          email: clean(r.data.email),
+          cnpj_eex: clean(r.data.cnpj_eex),
+          cnpj_uex: clean(r.data.cnpj_uex),
+          rede_atendimento: clean(r.data.rede_atendimento),
+          localizacao: clean(r.data.localizacao),
+          mandato_dirigente: clean(r.data.mandato_dirigente),
+          data_fim_mandato: (r.data.data_fim_mandato as string | null) ?? null,
+        };
+
+        validRows.push({ rowIndex: r.rowIndex, inep, name, active, payload });
       }
 
       if (validRows.length === 0) {
@@ -73,10 +120,8 @@ export function useImportEscolas() {
         };
       }
 
-      const payload = validRows.map((r) => ({
-        inep: r.inep,
-        name: r.name,
-        active: r.active,
+      const inserts: Database['public']['Tables']['escolas']['Insert'][] = validRows.map((r) => ({
+        ...(r.payload as Database['public']['Tables']['escolas']['Insert']),
         created_by: user?.id ?? null,
         updated_by: user?.id ?? null,
         deleted_at: null,
@@ -87,7 +132,7 @@ export function useImportEscolas() {
       // Bulk insert — tenta tudo de uma vez
       const { error: bulkError, data: bulkData } = await supabase
         .from('escolas')
-        .insert(payload)
+        .insert(inserts)
         .select('id, inep');
 
       if (!bulkError && bulkData) {
@@ -130,9 +175,7 @@ export function useImportEscolas() {
         const { error } = await supabase
           .from('escolas')
           .insert({
-            inep: r.inep,
-            name: r.name,
-            active: r.active,
+            ...(r.payload as Database['public']['Tables']['escolas']['Insert']),
             created_by: user?.id ?? null,
             updated_by: user?.id ?? null,
             deleted_at: null,

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
+import type { Database } from '@/types/database';
 
 export type Escola = {
   id: string;
@@ -10,12 +11,29 @@ export type Escola = {
   last_movement_at: string | null;
   created_at: string;
   updated_at: string;
+  // Campos opcionais (modelo FNDE)
+  phone: string | null;
+  email: string | null;
+  cnpj_eex: string | null;
+  cnpj_uex: string | null;
+  rede_atendimento: string | null;
+  localizacao: string | null;
+  mandato_dirigente: string | null;
+  data_fim_mandato: string | null;
 };
 
 export type EscolaInsert = {
   inep: string;
   name: string;
   active?: boolean;
+  phone?: string | null;
+  email?: string | null;
+  cnpj_eex?: string | null;
+  cnpj_uex?: string | null;
+  rede_atendimento?: string | null;
+  localizacao?: string | null;
+  mandato_dirigente?: string | null;
+  data_fim_mandato?: string | null;
 };
 
 export function useEscolas(search?: string) {
@@ -25,7 +43,9 @@ export function useEscolas(search?: string) {
       let q = supabase
         .from('escolas')
         .select(
-          'id, inep, name, active, last_movement_at, created_at, updated_at',
+          'id, inep, name, active, last_movement_at, created_at, updated_at, ' +
+            'phone, email, cnpj_eex, cnpj_uex, rede_atendimento, localizacao, ' +
+            'mandato_dirigente, data_fim_mandato',
         )
         .is('deleted_at', null)
         .order('name', { ascending: true });
@@ -37,7 +57,7 @@ export function useEscolas(search?: string) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as Escola[];
+      return (data ?? []) as unknown as Escola[];
     },
     staleTime: 60_000,
   });
@@ -72,6 +92,14 @@ export function useCreateEscola() {
           inep: input.inep.trim(),
           name: input.name.trim(),
           active: input.active ?? true,
+          phone: input.phone ?? null,
+          email: input.email ?? null,
+          cnpj_eex: input.cnpj_eex ?? null,
+          cnpj_uex: input.cnpj_uex ?? null,
+          rede_atendimento: input.rede_atendimento ?? null,
+          localizacao: input.localizacao ?? null,
+          mandato_dirigente: input.mandato_dirigente ?? null,
+          data_fim_mandato: input.data_fim_mandato ?? null,
           created_by: user?.id ?? null,
           updated_by: user?.id ?? null,
           deleted_at: null,
@@ -93,15 +121,25 @@ export function useUpdateEscola(id: string) {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (input: Partial<EscolaInsert>) => {
-      const update: Partial<{
-        inep: string;
-        name: string;
-        active: boolean;
-        updated_by: string | null;
-      }> = { updated_by: user?.id ?? null };
+      // Só envia o que veio preenchido no input — evita sobrescrever
+      // campos opcionais com null quando o form não toca neles.
+      const update: Database['public']['Tables']['escolas']['Update'] = {
+        updated_by: user?.id ?? null,
+      };
       if (input.inep !== undefined) update.inep = input.inep.trim();
       if (input.name !== undefined) update.name = input.name.trim();
       if (input.active !== undefined) update.active = input.active;
+      if (input.phone !== undefined) update.phone = input.phone;
+      if (input.email !== undefined) update.email = input.email;
+      if (input.cnpj_eex !== undefined) update.cnpj_eex = input.cnpj_eex;
+      if (input.cnpj_uex !== undefined) update.cnpj_uex = input.cnpj_uex;
+      if (input.rede_atendimento !== undefined)
+        update.rede_atendimento = input.rede_atendimento;
+      if (input.localizacao !== undefined) update.localizacao = input.localizacao;
+      if (input.mandato_dirigente !== undefined)
+        update.mandato_dirigente = input.mandato_dirigente;
+      if (input.data_fim_mandato !== undefined)
+        update.data_fim_mandato = input.data_fim_mandato;
 
       const { data, error } = await supabase
         .from('escolas')
@@ -111,7 +149,7 @@ export function useUpdateEscola(id: string) {
         .single();
 
       if (error) throw error;
-      return data as Escola;
+      return data as unknown as Escola;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['escolas'] });

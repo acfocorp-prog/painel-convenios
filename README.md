@@ -64,6 +64,24 @@ npm run dev
 4. Ainda no SQL Editor, rode `supabase/seed.sql` (ou já está coberto na última
    migration) para popular `verba_tipos`, `status_catalog` e `config`.
 
+## Importar escolas (modelo FNDE)
+
+O menu **Escolas → Importar planilha** aceita dois formatos:
+
+- **`.xlsx`** (Excel/Sheets) com colunas `INEP` / `Nome` / `Ativo` (mínimo).
+- **`.xls` / `.html`** do modelo **FNDE "Situação Cadastral das Entidades"** — o FNDE exporta como HTML salvo com extensão `.xls`. Reconhece 18 colunas:
+  `Código Escola`, `Escola`, `CNPJ EEX`, `CNPJ UEX`, `Localização`, `Razão Social`,
+  `DDD Telefone`, `Telefone`, `Email`, `Rede de Atendimento`, `Mandato Dirigente`,
+  `Data Fim do Mandato`, etc. Os cabeçalhos são mapeados automaticamente para
+  os campos do cadastro (tolerante a variações).
+
+Após importar, o sino de "Importadas / Puladas / Erros de leitura" mostra o
+resultado. Linhas com INEP já existente são puladas (não sobrescreve).
+
+Os campos extras ficam disponíveis no detalhe da escola (card "Dados
+adicionais") e no formulário de cadastro (accordéon "Dados adicionais
+(opcional — modelo FNDE)").
+
 ## PWA — instalar no telemóvel
 
 Após o deploy (ou em `npm run preview`/HTTPS local), abra o app no Chrome do

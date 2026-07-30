@@ -56,3 +56,32 @@ export function initialsOf(name?: string | null, fallback = '?') {
     .map((p) => p[0]?.toUpperCase() ?? '')
     .join('');
 }
+
+/**
+ * Formata telefone a partir de uma string só com dígitos (10 ou 11 chars).
+ * 11 dígitos: (21) 97063-687 ou (21) 9706-3687 dependendo do tamanho.
+ * Retorna o próprio valor se já está vazio/inválido.
+ */
+export function formatPhone(value?: string | null) {
+  if (!value) return '—';
+  const digits = String(value).replace(/\D/g, '');
+  if (!digits) return '—';
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return value;
+}
+
+/**
+ * Formata CNPJ a partir de uma string só com dígitos (14 chars).
+ * Retorna o próprio valor se vazio/inválido.
+ */
+export function formatCNPJ(value?: string | null) {
+  if (!value) return '—';
+  const digits = String(value).replace(/\D/g, '');
+  if (digits.length !== 14) return value;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
+}

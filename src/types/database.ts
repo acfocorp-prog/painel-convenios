@@ -47,6 +47,16 @@ export interface Database {
           updated_by: string | null;
           updated_at: string;
           deleted_at: string | null;
+          // Campos opcionais vindos do modelo FNDE
+          // ("Situação Cadastral das Entidades").
+          phone: string | null;
+          email: string | null;
+          cnpj_eex: string | null;
+          cnpj_uex: string | null;
+          rede_atendimento: string | null;
+          localizacao: string | null;
+          mandato_dirigente: string | null;
+          data_fim_mandato: string | null;
         };
         Insert: Omit<
           Database['public']['Tables']['escolas']['Row'],

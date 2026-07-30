@@ -10,9 +10,16 @@ import ExcelJS from 'exceljs';
  * Export escreve 1 sheet com cabeçalho formatado (negrito, fundo brand-50,
  * congelar primeira linha).
  *
- * Import lê a 1ª sheet, mapeia linhas pelo header (case-insensitive, ignora
- * acentos) e devolve `{ rowIndex, data, errors }` por linha pra validação
- * separada. O componente decide se mostra erro ou segue.
+ * Import detecta automaticamente o formato do arquivo a partir dos primeiros
+ * bytes:
+ *  - `<` ... → HTML (modelo FNDE "Situação Cadastral das Entidades" salvo
+ *    como .xls). Usa DOMParser nativo.
+ *  - `PK` (50 4B) → xlsx (zip). Usa exceljs.xlsx.load().
+ *  - .xls binário legacy (BIFF/OLE2) NÃO é suportado — FNDE não usa mais.
+ *
+ * Reconhecimento de cabeçalho é tolerante: aliases configurados via
+ * `HEADER_ALIASES` mapeiam nomes do FNDE ("Código Escola") para a chave
+ * canônica (`inep`). Normalização é case + accent-insensitive.
  */
 
 // ── Tipos ──────────────────────────────────────────────────────────────
@@ -79,6 +86,51 @@ function coerce(value: unknown, type: ColumnType | undefined): unknown {
     return null;
   }
   return value;
+}
+
+/**
+ * Aliases de cabeçalho: chave canônica → variantes aceitas (case/accent
+ * insensitivity). Usado tanto no xlsx (FNDE exporta com "Código Escola")
+ * quanto no HTML. Não inclui a chave canônica — ela é sempre aceita.
+ */
+export const HEADER_ALIASES: Record<string, string[]> = {
+  inep: ['codigo escola', 'cod escola'],
+  name: ['escola', 'nome da escola', 'nome'],
+  active: ['ativo', 'situacao', 'situação'],
+  phone: ['telefone', 'fone', 'tel', 'phone'],
+  phone_ddd: ['ddd', 'ddd telefone', 'codigo ddd', 'cod ddd'],
+  email: ['e-mail', 'email', 'correio eletronico'],
+  cnpj_eex: ['cnpj eex', 'cnpj da eex', 'cnpj entidade', 'cnpj da entidade executora'],
+  cnpj_uex: ['cnpj uex', 'cnpj da uex', 'cnpj unidade', 'cnpj da unidade executora'],
+  rede_atendimento: ['rede', 'rede de atendimento'],
+  localizacao: ['localização', 'localizacao'],
+  mandato_dirigente: ['mandato', 'mandato dirigente', 'situacao mandato'],
+  data_fim_mandato: [
+    'data fim mandato',
+    'data fim do mandato',
+    'termino mandato',
+    'término mandato',
+    'validade mandato',
+  ],
+};
+
+/**
+ * Dado o header da planilha (texto bruto) e a lista de colunas canônicas,
+ * devolve o `key` da coluna correspondente ou `null` se não reconhecido.
+ * Aceita o header canônico exato OU qualquer variante em HEADER_ALIASES.
+ */
+function matchColumnKey(headerText: string, columns: ColumnSpec[]): string | null {
+  const norm = normalizeHeader(headerText);
+  if (!norm) return null;
+  // match exato na chave canônica (sem precisar estar em aliases)
+  const direct = columns.find((c) => normalizeHeader(c.header) === norm);
+  if (direct) return direct.key;
+  // match via alias
+  for (const [canonKey, aliases] of Object.entries(HEADER_ALIASES)) {
+    if (!columns.some((c) => c.key === canonKey)) continue;
+    if (aliases.some((a) => normalizeHeader(a) === norm)) return canonKey;
+  }
+  return null;
 }
 
 // ── Export ─────────────────────────────────────────────────────────────
@@ -150,12 +202,43 @@ export async function exportToExcel<T>(
 // ── Import ─────────────────────────────────────────────────────────────
 
 /**
- * Lê o 1º sheet de um File .xlsx/.xls e mapeia linhas pelo header.
- * Tolerante a colunas extras (ignoradas) e a colunas faltantes (viram undefined).
+ * Detecta formato do arquivo pelos primeiros bytes:
+ *  - `PK` (0x50 0x4B) → xlsx (zip)
+ *  - `<` → HTML
+ *  - qualquer outra coisa → erro
+ */
+async function detectFormat(file: File): Promise<'xlsx' | 'html'> {
+  const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  if (head[0] === 0x50 && head[1] === 0x4b) return 'xlsx';
+  // 0x3C = '<'
+  if (head[0] === 0x3c) return 'html';
+  // alguns HTMLs vêm com BOM UTF-8 antes do '<'
+  if (head[0] === 0xef && head[1] === 0xbb && head[2] === 0xbf && head[3] === 0x3c) return 'html';
+  throw new Error(
+    'Formato não suportado. Use .xlsx (Excel/Sheets) ou o modelo FNDE (.xls/HTML).',
+  );
+}
+
+/**
+ * Lê o arquivo e mapeia linhas pelo header. Aceita .xlsx e HTML (modelo FNDE).
+ *
+ * Tolerante a:
+ *  - colunas extras (ignoradas)
+ *  - colunas faltantes (viram undefined)
+ *  - aliases do FNDE ("Código Escola" → inep, etc)
  *
  * @returns array de ParsedRow com data parcial + errors por linha
  */
 export async function importFromExcel<T>(
+  file: File,
+  columns: ColumnSpec<T>[],
+): Promise<ParsedRow<T>[]> {
+  const fmt = await detectFormat(file);
+  if (fmt === 'html') return parseHTMLTable(file, columns);
+  return parseXLSX(file, columns);
+}
+
+async function parseXLSX<T>(
   file: File,
   columns: ColumnSpec<T>[],
 ): Promise<ParsedRow<T>[]> {
@@ -169,9 +252,8 @@ export async function importFromExcel<T>(
   const headerRow = ws.getRow(1);
   const colIndex: Record<string, number> = {};
   headerRow.eachCell((cell, colNumber) => {
-    const normalized = normalizeHeader(String(cell.value ?? ''));
-    const match = columns.find((c) => normalizeHeader(c.header) === normalized);
-    if (match) colIndex[match.key] = colNumber;
+    const key = matchColumnKey(String(cell.value ?? ''), columns as ColumnSpec[]);
+    if (key) colIndex[key] = colNumber;
   });
 
   const out: ParsedRow<T>[] = [];
@@ -208,6 +290,92 @@ export async function importFromExcel<T>(
   return out;
 }
 
+/**
+ * Parser de planilha HTML (modelo FNDE "Situação Cadastral das Entidades",
+ * salvo pelo FNDE como .xls mas com conteúdo HTML).
+ *
+ * Estratégia:
+ *  - Lê arquivo como texto (UTF-8 com fallback pra WINDOWS-1252).
+ *  - Usa DOMParser pra achar a 2ª `<table>` (a 1ª é o cabeçalho do FNDE com
+ *    logo + filtros; a 2ª contém a lista de escolas com `<th>` headers).
+ *  - Mapeia cada `<th>` → chave canônica via matchColumnKey.
+ *  - Lê cada `<tr>` posterior, coleta texto das `<td>` por posição.
+ */
+async function parseHTMLTable<T>(
+  file: File,
+  columns: ColumnSpec<T>[],
+): Promise<ParsedRow<T>[]> {
+  // Tenta UTF-8 primeiro; se vier com caracteres quebrados (�), tenta WIN1252.
+  let html = await file.text();
+  if (/�/.test(html) || /Situaï¿½/.test(html)) {
+    const buf = await file.arrayBuffer();
+    try {
+      html = new TextDecoder('windows-1252').decode(buf);
+    } catch {
+      // mantém o texto original
+    }
+  }
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const tables = doc.querySelectorAll('table');
+  if (tables.length === 0) return [];
+
+  // Procura a 1ª tabela que tenha <th> (cabeçalho de colunas).
+  let dataTable: HTMLTableElement | null = null;
+  for (const t of Array.from(tables)) {
+    if (t.querySelector('th')) {
+      dataTable = t as HTMLTableElement;
+      break;
+    }
+  }
+  if (!dataTable) return [];
+
+  const headerCells = Array.from(dataTable.querySelectorAll('tr:first-child > th'));
+  if (headerCells.length === 0) return [];
+
+  // Mapeia índice da coluna → key canônica
+  const colKeys: Array<string | null> = headerCells.map((th) =>
+    matchColumnKey((th.textContent || '').trim(), columns as ColumnSpec[]),
+  );
+
+  const out: ParsedRow<T>[] = [];
+  const rows = Array.from(dataTable.querySelectorAll('tr')).slice(1); // pula header
+
+  for (let i = 0; i < rows.length; i++) {
+    const tr = rows[i];
+    const cells = Array.from(tr.querySelectorAll('td'));
+    if (cells.length === 0) continue;
+    // Linha vazia (sem texto em nenhuma célula) → pula
+    const joined = cells.map((c) => (c.textContent || '').trim()).join('');
+    if (!joined) continue;
+
+    const data: Record<string, unknown> = {};
+    const errors: string[] = [];
+
+    for (let c = 0; c < colKeys.length; c++) {
+      const key = colKeys[c];
+      if (!key) continue;
+      const text = (cells[c]?.textContent || '').trim();
+      const col = columns.find((cc) => cc.key === key);
+      const coerced = coerce(text, col?.type);
+      if (coerced === null && text !== '') {
+        errors.push(
+          `Coluna "${col?.header ?? key}": valor inválido (${text.slice(0, 20)})`,
+        );
+      }
+      data[key] = coerced;
+    }
+
+    out.push({
+      rowIndex: i + 2, // header na linha 1, dados a partir da linha 2
+      data: data as Partial<T>,
+      errors,
+    });
+  }
+
+  return out;
+}
+
 // ── Browser download helper ────────────────────────────────────────────
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -227,16 +395,37 @@ function downloadBlob(blob: Blob, filename: string) {
 import type { Database } from '@/types/database';
 type EscolaRow = Database['public']['Tables']['escolas']['Row'];
 
-export const ESCOLA_IMPORT_COLUMNS: ColumnSpec<EscolaRow>[] = [
+// `phone_ddd` é um alias temporário (não vira coluna) usado pra montar
+// `phone` antes de gravar — vem do "DDD Telefone" do modelo FNDE.
+type EscolaImportRow = EscolaRow & { phone_ddd?: string | null };
+
+export const ESCOLA_IMPORT_COLUMNS: ColumnSpec<EscolaImportRow>[] = [
   { key: 'inep', header: 'INEP', type: 'string', width: 14 },
   { key: 'name', header: 'Nome', type: 'string', width: 48 },
   { key: 'active', header: 'Ativo', type: 'boolean', width: 8 },
+  { key: 'phone_ddd', header: 'DDD Telefone', type: 'string', width: 8 },
+  { key: 'phone', header: 'Telefone', type: 'string', width: 18 },
+  { key: 'email', header: 'Email', type: 'string', width: 32 },
+  { key: 'cnpj_eex', header: 'CNPJ EEX', type: 'string', width: 22 },
+  { key: 'cnpj_uex', header: 'CNPJ UEX', type: 'string', width: 22 },
+  { key: 'rede_atendimento', header: 'Rede de Atendimento', type: 'string', width: 20 },
+  { key: 'localizacao', header: 'Localização', type: 'string', width: 14 },
+  { key: 'mandato_dirigente', header: 'Mandato Dirigente', type: 'string', width: 18 },
+  { key: 'data_fim_mandato', header: 'Data Fim do Mandato', type: 'date', width: 18 },
 ];
 
 export const ESCOLA_EXPORT_COLUMNS: ColumnSpec<EscolaRow>[] = [
   { key: 'inep', header: 'INEP', width: 14 },
   { key: 'name', header: 'Nome', width: 48 },
   { key: 'active', header: 'Ativo', width: 8 },
+  { key: 'phone', header: 'Telefone', width: 18 },
+  { key: 'email', header: 'Email', width: 32 },
+  { key: 'cnpj_eex', header: 'CNPJ EEX', width: 22 },
+  { key: 'cnpj_uex', header: 'CNPJ UEX', width: 22 },
+  { key: 'rede_atendimento', header: 'Rede', width: 14 },
+  { key: 'localizacao', header: 'Localização', width: 14 },
+  { key: 'mandato_dirigente', header: 'Mandato', width: 14 },
+  { key: 'data_fim_mandato', header: 'Fim do Mandato', width: 16 },
   { key: 'last_movement_at', header: 'Última movimentação', width: 22 },
   { key: 'created_at', header: 'Criado em', width: 22 },
   { key: 'updated_at', header: 'Atualizado em', width: 22 },

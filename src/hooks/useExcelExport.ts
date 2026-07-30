@@ -187,10 +187,20 @@ export function useMandatoExport(rows: MandatoRow[]) {
 
 // ── Escolas ────────────────────────────────────────────────────────────
 import type { Escola } from './useEscolas';
+import { formatCNPJ, formatPhone } from '@/lib/utils';
+
 export const ESCOLA_EXPORT_HOOK_COLUMNS: ColumnSpec<Escola>[] = [
   { key: 'inep', header: 'INEP', width: 14 },
   { key: 'name', header: 'Nome', width: 48 },
   { key: 'active', header: 'Ativo', width: 8 },
+  { key: 'phone', header: 'Telefone', width: 18 },
+  { key: 'email', header: 'Email', width: 32 },
+  { key: 'cnpj_eex', header: 'CNPJ EEX', width: 22 },
+  { key: 'cnpj_uex', header: 'CNPJ UEX', width: 22 },
+  { key: 'rede_atendimento', header: 'Rede', width: 14 },
+  { key: 'localizacao', header: 'Localização', width: 14 },
+  { key: 'mandato_dirigente', header: 'Mandato', width: 14 },
+  { key: 'data_fim_mandato', header: 'Fim do Mandato', width: 16 },
   { key: 'last_movement_at', header: 'Última movimentação', width: 22 },
   { key: 'created_at', header: 'Criado em', width: 22 },
   { key: 'updated_at', header: 'Atualizado em', width: 22 },
@@ -199,6 +209,10 @@ export const ESCOLA_EXPORT_HOOK_COLUMNS: ColumnSpec<Escola>[] = [
 function serializeEscolaRow(r: Escola): Record<string, unknown> {
   return {
     ...r,
+    phone: formatPhone(r.phone),
+    cnpj_eex: formatCNPJ(r.cnpj_eex),
+    cnpj_uex: formatCNPJ(r.cnpj_uex),
+    data_fim_mandato: formatDate(r.data_fim_mandato),
     last_movement_at: formatDate(r.last_movement_at),
     created_at: formatDate(r.created_at),
     updated_at: formatDate(r.updated_at),

@@ -60,9 +60,11 @@ export function EscolaImportDialog() {
         <DialogHeader>
           <DialogTitle>Importar escolas</DialogTitle>
           <DialogDescription>
-            Planilha .xlsx com colunas <strong>INEP</strong>, <strong>Nome</strong> e{' '}
-            <strong>Ativo</strong> (opcional). Linhas com INEP já existente são
-            puladas, nunca sobrescritas.
+            Aceita <strong>.xlsx</strong> (Excel/Sheets) com colunas INEP/Nome/Ativo
+            ou o modelo <strong>FNDE "Situação Cadastral das Entidades"</strong>{' '}
+            (arquivo .xls/HTML com 18 colunas: Código Escola, Escola, CNPJ EEX,
+            Telefone, Email, Mandato Dirigente, etc). Linhas com INEP já
+            existente são puladas, nunca sobrescritas.
           </DialogDescription>
         </DialogHeader>
 
@@ -71,7 +73,7 @@ export function EscolaImportDialog() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.html,.htm,text/html,application/vnd.ms-excel"
               className="hidden"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />

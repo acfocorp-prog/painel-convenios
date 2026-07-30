@@ -23,7 +23,7 @@ import type { ConvenioRow } from '@/hooks/useConvenios';
 import type { SimecRow } from '@/hooks/useSimec';
 import type { BienioRow } from '@/hooks/useBienios';
 import type { MandatoRow } from '@/hooks/useMandatos';
-import { cn, formatDate, formatRelative } from '@/lib/utils';
+import { cn, formatCNPJ, formatDate, formatPhone, formatRelative } from '@/lib/utils';
 
 const PREVIEW_LIMIT = 5;
 
@@ -67,6 +67,8 @@ export function EscolaDetailPage() {
 
       <ToggleActive escolaId={id!} active={escola.active} />
 
+      <DadosAdicionais escola={escola} />
+
       <SectionConvenios items={records.convenios} />
       <SectionSimec items={records.simec} />
       <SectionBienios items={records.bienios} />
@@ -106,6 +108,44 @@ function ToggleActive({ escolaId, active }: { escolaId: string; active: boolean 
           {active ? 'Inativar' : 'Reativar'}
         </Button>
       </div>
+    </Card>
+  );
+}
+
+/** Card com os campos opcionais do modelo FNDE (só renderiza se algum estiver preenchido). */
+function DadosAdicionais({ escola }: { escola: NonNullable<ReturnType<typeof useEscola>['data']> }) {
+  const fields: Array<{ label: string; value: string }> = [];
+  if (escola.phone) fields.push({ label: 'Telefone', value: formatPhone(escola.phone) });
+  if (escola.email) fields.push({ label: 'Email', value: escola.email });
+  if (escola.cnpj_eex) fields.push({ label: 'CNPJ EEX', value: formatCNPJ(escola.cnpj_eex) });
+  if (escola.cnpj_uex) fields.push({ label: 'CNPJ UEX', value: formatCNPJ(escola.cnpj_uex) });
+  if (escola.rede_atendimento)
+    fields.push({ label: 'Rede', value: escola.rede_atendimento });
+  if (escola.localizacao) fields.push({ label: 'Localização', value: escola.localizacao });
+  if (escola.mandato_dirigente)
+    fields.push({ label: 'Mandato', value: escola.mandato_dirigente });
+  if (escola.data_fim_mandato)
+    fields.push({ label: 'Fim do mandato', value: formatDate(escola.data_fim_mandato) });
+
+  if (fields.length === 0) return null;
+
+  return (
+    <Card className="p-3">
+      <h2 className="mb-2 text-sm font-semibold text-slate-900">
+        Dados adicionais
+      </h2>
+      <dl className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+        {fields.map((f) => (
+          <div key={f.label} className="min-w-0">
+            <dt className="text-xs uppercase tracking-wide text-slate-500">
+              {f.label}
+            </dt>
+            <dd className="truncate text-sm text-slate-800" title={f.value}>
+              {f.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </Card>
   );
 }
