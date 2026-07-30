@@ -67,7 +67,32 @@ function coerce(value: unknown, type: ColumnType | undefined): unknown {
   }
   if (type === 'date') {
     if (value instanceof Date) return value.toISOString().slice(0, 10);
-    // string/num: tenta Date
+    // string/num: tenta vários formatos comuns antes de cair no Date().
+    // O modelo FNDE exporta datas como dd/mm/yyyy — `new Date("21/11/2026")`
+    // retorna Invalid Date em todos os browsers, então tratamos manualmente.
+    if (typeof value === 'string' || typeof value === 'number') {
+      const s = String(value).trim();
+      // dd/mm/yyyy ou dd-mm-yyyy
+      const br = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/.exec(s);
+      if (br) {
+        const day = Number(br[1]);
+        const month = Number(br[2]);
+        let year = Number(br[3]);
+        if (year < 100) year += year < 50 ? 2000 : 1900;
+        const d = new Date(Date.UTC(year, month - 1, day));
+        if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+        return null;
+      }
+      // yyyy-mm-dd (ISO) já funciona com new Date, mas parseamos explícito
+      // pra evitar ambiguidade de timezone em algumas plataformas.
+      const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+      if (iso) {
+        const d = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+        if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+        return null;
+      }
+    }
+    // fallback: tenta Date() (cobre timestamps numéricos do Excel, ISO com hora, etc)
     const d = new Date(value as string | number);
     if (Number.isNaN(d.getTime())) return null;
     return d.toISOString().slice(0, 10);
